@@ -287,7 +287,7 @@ bool RCommitLog::createTempFile(std::string& temp_file) {
 
 // RCommitFile
 
-RCommitFile::RCommitFile(const std::string& filename, const std::string& action, vec3 colour) {
+RCommitFile::RCommitFile(const std::string& filename, const std::string& action, vec4 colour) {
 
     this->filename = RCommitLog::filter_utf8(filename);
 
@@ -304,7 +304,7 @@ RCommit::RCommit() {
     timestamp = 0;
 }
 
-vec3 RCommit::fileColour(const std::string& filename) {
+vec4 RCommit::fileColour(const std::string& filename) {
 
     size_t slash = filename.rfind('/');
     size_t dot   = filename.rfind('.');
@@ -314,7 +314,7 @@ vec3 RCommit::fileColour(const std::string& filename) {
 
         return colourHash(file_ext);
     } else {
-        return vec3(1.0, 1.0, 1.0);
+        return vec4(1.0, 1.0, 1.0, 1.0);
     }
 }
 
@@ -322,7 +322,7 @@ void RCommit::addFile(const std::string& filename, const std::string& action) {
     addFile(filename, action, fileColour(filename));
 }
 
-void RCommit::addFile(const std::string& filename, const  std::string& action, const vec3& colour) {
+void RCommit::addFile(const std::string& filename, const  std::string& action, const vec4& colour) {
     //check filename against filters
     if(!gGourceSettings.file_filters.empty()) {
 

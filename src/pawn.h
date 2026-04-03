@@ -91,7 +91,7 @@ public:
     bool isHidden() const { return hidden; }
 
     virtual float getAlpha() const{ return std::min(elapsed/fadetime, 1.0f); }
-    virtual vec3 getColour() const { return vec3(1.0, 1.0, 1.0); }
+    virtual vec4 getColour() const { return vec4(1.0, 1.0, 1.0, 1.0); }
 
     void setGraphic(TextureResource* graphic);
 

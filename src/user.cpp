@@ -194,7 +194,7 @@ void RUser::assignUserImage() {
         if(findimage != gGourceSettings.user_image_map.end()) {
             std::string imagefile = findimage->second;
 
-            if(!gGourceSettings.colour_user_images) usercol = vec3(1.0, 1.0, 1.0);
+            if(!gGourceSettings.colour_user_images) usercol = vec4(1.0, 1.0, 1.0, 1.0);
 
             graphic = texturemanager.grabFile(imagefile, true, GL_CLAMP_TO_EDGE);
         }
@@ -207,7 +207,7 @@ void RUser::assignUserImage() {
     //nope
     if(!graphic) {
         if(gGourceSettings.default_user_image.size() > 0) {
-            if(!gGourceSettings.colour_user_images) usercol = vec3(1.0, 1.0, 1.0);
+            if(!gGourceSettings.colour_user_images) usercol = vec4(1.0, 1.0, 1.0, 1.0);
             graphic = texturemanager.grabFile(gGourceSettings.default_user_image, true, GL_CLAMP_TO_EDGE);
         } else {
             graphic = texturemanager.grab("user.png", true, GL_CLAMP_TO_EDGE);
@@ -216,8 +216,9 @@ void RUser::assignUserImage() {
 
     setGraphic(graphic);
 
-    usercol = usercol * 0.6f + vec3(1.0f) * 0.4f;
-    usercol *= 0.9f;
+    vec3 rgb = vec3(usercol) * 0.6f + vec3(1.0f) * 0.4f;
+    rgb *= 0.9f;
+    usercol = vec4(rgb, usercol.w);
 }
 
 int RUser::getActionCount() {
@@ -330,8 +331,8 @@ const vec3& RUser::getNameColour() const {
     return selected ? gGourceSettings.selection_colour : highlighted ? gGourceSettings.highlight_colour : namecol;
 }
 
-vec3 RUser::getColour() const{
-    if(selected) return vec3(1.0, 1.0, 1.0);
+vec4 RUser::getColour() const{
+    if(selected) return vec4(1.0, 1.0, 1.0, 1.0);
 
     return usercol;
 }

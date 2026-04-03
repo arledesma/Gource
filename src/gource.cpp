@@ -2266,13 +2266,13 @@ void Gource::updateVBOs(float dt) {
             RUser* user = it->second;
 
             float alpha = user->getAlpha();
-            vec3 col   = user->getColour();
+            vec4 col   = user->getColour();
 
             vec2 scaled_dims = user->dims;
 
             if(gGourceSettings.fixed_user_size) scaled_dims *= (-camera.getPos().z / -starting_z);
 
-            user_vbo.add(user->graphic->textureid, user->getPos() - scaled_dims*0.5f, scaled_dims, vec4(col.x, col.y, col.z, alpha));
+            user_vbo.add(user->graphic->textureid, user->getPos() - scaled_dims*0.5f, scaled_dims, vec4(col.x, col.y, col.z, col.w * alpha));
 
             //draw actions
             user->updateActionsVBO(action_vbo);
@@ -2643,7 +2643,7 @@ void Gource::draw(float t, float dt) {
 
     // text using the specified font goes here
 
-    fontmedium.setColour(vec4(gGourceSettings.font_colour, 1.0f));
+    fontmedium.setColour(gGourceSettings.font_colour);
 
     if(!gGourceSettings.hide_date) {
         fontmedium.draw(display.width/2 - date_x_offset, 20, displaydate);
@@ -2678,14 +2678,14 @@ void Gource::draw(float t, float dt) {
 
         textbox.setText(hoverFile->getName());
         if(display_path.size()) textbox.addLine(display_path);
-        textbox.setColour(hoverFile->getColour());
+        textbox.setColour(vec3(hoverFile->getColour()));
 
         textbox.setPos(mousepos, true);
         textbox.draw();
     } else if(hoverUser && hoverUser != selectedUser) {
 
         textbox.setText(hoverUser->getName());
-        textbox.setColour(hoverUser->getColour());
+        textbox.setColour(vec3(hoverUser->getColour()));
 
         textbox.setPos(mousepos, true);
         textbox.draw();

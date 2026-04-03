@@ -51,6 +51,6 @@ void RCaption::logic(float dt) {
 }
 
 void RCaption::draw() {
-    font.setColour(vec4(colour.x, colour.y, colour.z, alpha));
+    font.setColour(vec4(colour.x, colour.y, colour.z, colour.w * alpha));
     font.draw(pos.x, pos.y, caption);
 }

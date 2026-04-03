@@ -18,19 +18,20 @@
 #include "custom.h"
 #include "../gource_settings.h"
 
-Regex custom_regex("^(?:\\xEF\\xBB\\xBF)?([^|]+)\\|([^|]*)\\|([ADM]?)\\|([^|]+)(?:\\|#?([a-fA-F0-9]{6}))?");
+Regex custom_regex("^(?:\\xEF\\xBB\\xBF)?([^|]+)\\|([^|]*)\\|([ADM]?)\\|([^|]+)(?:\\|#?([a-fA-F0-9]{6}(?:[a-fA-F0-9]{2})?))?");
 
 CustomLog::CustomLog(const std::string& logfile) : RCommitLog(logfile) {
 }
 
-vec3 CustomLog::parseColour(const std::string& cstr) {
+vec4 CustomLog::parseColour(const std::string& cstr) {
 
-    vec3 colour;
-    int r,g,b;
+    vec4 colour(1.0f);
+    int r,g,b,a = 255;
 
-    if(sscanf(cstr.c_str(), "%02x%02x%02x", &r, &g, &b) == 3) {
-        colour = vec3( r, g, b );
-        colour /= 255.0f;
+    if(cstr.size() == 8 && sscanf(cstr.c_str(), "%02x%02x%02x%02x", &r, &g, &b, &a) == 4) {
+        colour = vec4(r / 255.0f, g / 255.0f, b / 255.0f, a / 255.0f);
+    } else if(cstr.size() == 6 && sscanf(cstr.c_str(), "%02x%02x%02x", &r, &g, &b) == 3) {
+        colour = vec4(r / 255.0f, g / 255.0f, b / 255.0f, 1.0f);
     }
 
     return colour;
@@ -84,7 +85,7 @@ bool CustomLog::parseCommitEntry(RCommit& commit) {
     }
 
     bool has_colour = false;
-    vec3 colour;
+    vec4 colour;
 
     if(entries.size()>=5 && entries[4].size()>0) {
         has_colour = true;

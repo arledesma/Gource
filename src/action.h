@@ -26,7 +26,7 @@ class RFile;
 
 class RAction {
 protected:
-    vec3 colour;
+    vec4 colour;
     virtual void apply();
 public:
     RUser* source;
@@ -38,7 +38,7 @@ public:
     float progress;
     float rate;
 
-    RAction(RUser* source, RFile* target, time_t timestamp, float t, const vec3& colour);
+    RAction(RUser* source, RFile* target, time_t timestamp, float t, const vec4& colour);
     virtual ~RAction() {};
     
     inline bool isFinished() const { return (progress >= 1.0); };
@@ -63,9 +63,9 @@ public:
 
 class ModifyAction : public RAction {
 protected:
-    vec3 modify_colour;
+    vec4 modify_colour;
 public:
-    ModifyAction(RUser* source, RFile* target, time_t timestamp, float t, const vec3& modify_colour);
+    ModifyAction(RUser* source, RFile* target, time_t timestamp, float t, const vec4& modify_colour);
 
     void apply();
 };

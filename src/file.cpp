@@ -24,7 +24,7 @@ std::vector<RFile*> gGourceRemovedFiles;
 FXFont file_selected_font;
 FXFont file_font;
 
-RFile::RFile(const std::string & name, const vec3 & colour, const vec2 & pos, int tagid) : Pawn(name,pos,tagid) {
+RFile::RFile(const std::string & name, const vec4 & colour, const vec2 & pos, int tagid) : Pawn(name,pos,tagid) {
     hidden = true;
     size = gGourceFileDiameter * 1.05;
     radius = size * 0.5;
@@ -62,7 +62,7 @@ RFile::RFile(const std::string & name, const vec3 & colour, const vec2 & pos, in
         file_font = fontmanager.grab(gGourceSettings.font_file, gGourceSettings.scaled_filename_font_size);
         file_font.dropShadow(true);
         file_font.roundCoordinates(false);
-        file_font.setColour(vec4(gGourceSettings.filename_colour, 1.0f));
+        file_font.setColour(gGourceSettings.filename_colour);
     }
 
     setSelected(false);
@@ -141,16 +141,16 @@ const vec3& RFile::getNameColour() const{
     return selected ? gGourceSettings.selection_colour : namecol;
 }
 
-void RFile::setFileColour(const vec3 & colour) {
+void RFile::setFileColour(const vec4 & colour) {
     file_colour = colour;
 }
 
-const vec3 & RFile::getFileColour() const{
+const vec4 & RFile::getFileColour() const{
     return file_colour;
 }
 
-vec3 RFile::getColour() const{
-    if(selected) return vec3(1.0f);
+vec4 RFile::getColour() const{
+    if(selected) return vec4(1.0f);
 
     float lc = elapsed - last_action;
 
@@ -224,7 +224,7 @@ void RFile::logic(float dt) {
     if(isHidden() && !forced_removal) elapsed = 0.0;
 }
 
-void RFile::touch(time_t touched_timestamp, const vec3 & colour) {
+void RFile::touch(time_t touched_timestamp, const vec4 & colour) {
     if(forced_removal || (removing && touched_timestamp < removed_timestamp)) return;
 
     //fprintf(stderr, "touch %s\n", fullpath.c_str());

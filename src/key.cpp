@@ -4,7 +4,7 @@
 // File Key Entry
 // a string for the file ext and a colour
 
-FileKeyEntry::FileKeyEntry(const FXFont& font, const std::string& ext, const vec3& colour) {
+FileKeyEntry::FileKeyEntry(const FXFont& font, const std::string& ext, const vec4& colour) {
     this->ext    = ext;
     this->colour = colour;
     this->pos_y  = -1.0f;
@@ -41,7 +41,7 @@ FileKeyEntry::FileKeyEntry(const FXFont& font, const std::string& ext, const vec
     }
 }
 
-const vec3& FileKeyEntry::getColour() const {
+const vec4& FileKeyEntry::getColour() const {
     return colour;
 }
 
@@ -118,7 +118,7 @@ void FileKeyEntry::draw() {
     glEnable(GL_BLEND);
     glBlendFunc (GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-    glColor4f(0.0f, 0.0f, 0.0f, alpha * 0.333f);
+    glColor4f(0.0f, 0.0f, 0.0f, colour.w * alpha * 0.333f);
 
     glPushMatrix();
         glTranslatef(shadow.x, shadow.y, 0.0f);
@@ -132,10 +132,10 @@ void FileKeyEntry::draw() {
     glPopMatrix();
 
     glBegin(GL_QUADS);
-        glColor4f(colour.x * 0.5f, colour.y * 0.5f, colour.z * 0.5f, alpha);
+        glColor4f(colour.x * 0.5f, colour.y * 0.5f, colour.z * 0.5f, colour.w * alpha);
         glVertex2f(pos.x,         pos.y);
         glVertex2f(pos.x,         pos.y + height);
-        glColor4f(colour.x, colour.y, colour.z, alpha);
+        glColor4f(colour.x, colour.y, colour.z, colour.w * alpha);
         glVertex2f(pos.x + width, pos.y + height);
         glVertex2f(pos.x + width, pos.y);
     glEnd();
@@ -146,22 +146,22 @@ void FileKeyEntry::draw() {
     float lum = 0.299f * colour.x + 0.587f * colour.y + 0.114f * colour.z;
     vec3 text_col = (lum > 0.5f) ? vec3(0.0f, 0.0f, 0.0f) : vec3(1.0f, 1.0f, 1.0f);
 
-    font.setColour(vec4(text_col, alpha));
+    font.setColour(vec4(text_col, colour.w * alpha));
 
     font.dropShadow(false);
     font.draw((int)pos.x+2, (int)pos.y+3,  display_ext.c_str());
 
-    vec3 count_col;
+    vec4 count_col;
     if(gGourceSettings.key_count_colour_set) {
         count_col = gGourceSettings.key_count_colour;
     } else {
         float bg_lum = 0.299f * gGourceSettings.background_colour.x
                      + 0.587f * gGourceSettings.background_colour.y
                      + 0.114f * gGourceSettings.background_colour.z;
-        count_col = (bg_lum > 0.5f) ? vec3(0.0f, 0.0f, 0.0f) : vec3(1.0f, 1.0f, 1.0f);
+        count_col = (bg_lum > 0.5f) ? vec4(0.0f, 0.0f, 0.0f, 1.0f) : vec4(1.0f, 1.0f, 1.0f, 1.0f);
     }
 
-    font.setColour(vec4(count_col, alpha));
+    font.setColour(vec4(vec3(count_col), count_col.w * alpha));
     font.dropShadow(true);
     font.print((int)pos.x+width+4, (int)pos.y+3, "%d", count);
 }

@@ -166,14 +166,14 @@ void Pawn::draw(float dt) {
 
     float alpha = getAlpha();
 
-    vec3 col = getColour();
+    vec4 col = getColour();
 
     glBindTexture(GL_TEXTURE_2D, graphic->textureid);
 
     glPushMatrix();
         glTranslatef(offsetpos.x, offsetpos.y, 0.0f);
 
-        glColor4f(col.x, col.y, col.z, alpha);
+        glColor4f(col.x, col.y, col.z, col.w * alpha);
 
         glBegin(GL_QUADS);
             glTexCoord2f(0.0f,0.0f);

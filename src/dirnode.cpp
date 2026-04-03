@@ -517,7 +517,7 @@ vec3 RDirNode::averageFileColour() const{
 
         if(file->isHidden()) continue;
 
-        av += file->getColour();
+        av += vec3(file->getColour());
 
         count++;
     }
@@ -556,8 +556,9 @@ void RDirNode::calcColour() {
 
         if(file->isHidden()) continue;;
 
-        vec3 filecol = file->getColour() * brightness;
-        float a       = file->getAlpha();
+        vec4 filecol4 = file->getColour();
+        vec3 filecol = vec3(filecol4) * brightness;
+        float a       = file->getAlpha() * filecol4.w;
 
         col += vec4(filecol.x, filecol.y, filecol.z, a);
 
@@ -1040,10 +1041,10 @@ void RDirNode::updateFilesVBO(quadbuf& buffer, float dt) const{
 
             if(f->isHidden()) continue;
 
-            vec3 col   = f->getColour();
+            vec4 col   = f->getColour();
             float alpha = f->getAlpha();
 
-            buffer.add(f->graphic->textureid, f->getAbsolutePos() - f->dims*0.5f, f->dims, vec4(col.x, col.y, col.z, alpha));
+            buffer.add(f->graphic->textureid, f->getAbsolutePos() - f->dims*0.5f, f->dims, vec4(col.x, col.y, col.z, col.w * alpha));
         }
     }
 

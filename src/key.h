@@ -29,7 +29,7 @@
 
 class FileKeyEntry {   
     FXFont font;
-    vec3 colour;
+    vec4 colour;
     std::string ext;
     std::string display_ext;
     float alpha;
@@ -46,9 +46,9 @@ class FileKeyEntry {
     vec2 shadow;
     bool show;
 public:
-    FileKeyEntry(const FXFont& font, const std::string& ext, const vec3& colour);
+    FileKeyEntry(const FXFont& font, const std::string& ext, const vec4& colour);
 
-    const vec3& getColour() const;
+    const vec4& getColour() const;
     const std::string& getExt() const;
 
     void setDestY(float dest_y);

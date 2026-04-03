@@ -48,7 +48,7 @@ class RUser : public Pawn {
     float min_units_ps;
 
     std::string name;
-    vec3 usercol;
+    vec4 usercol;
 
     bool highlighted;
 
@@ -60,7 +60,7 @@ class RUser : public Pawn {
 public:
     RUser(const std::string& name, vec2 pos, int tagid);
 
-    vec3 getColour() const;
+    vec4 getColour() const;
     void colourize();
 
     const std::string& getName() const;

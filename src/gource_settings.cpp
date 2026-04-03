@@ -39,6 +39,19 @@
 
 GourceSettings gGourceSettings;
 
+static bool parseHexColour(const std::string& hex, vec4& out) {
+    int r, g, b, a = 255;
+    if(hex.size() == 6 && sscanf(hex.c_str(), "%02x%02x%02x", &r, &g, &b) == 3) {
+        out = vec4(r / 255.0f, g / 255.0f, b / 255.0f, 1.0f);
+        return true;
+    }
+    if(hex.size() == 8 && sscanf(hex.c_str(), "%02x%02x%02x%02x", &r, &g, &b, &a) == 4) {
+        out = vec4(r / 255.0f, g / 255.0f, b / 255.0f, a / 255.0f);
+        return true;
+    }
+    return false;
+}
+
 //display help message
 void GourceSettings::help(bool extended_help) {
 
@@ -135,7 +148,7 @@ if(extended_help) {
     printf("  --file-font-size SIZE    Font size for filenames\n");
     printf("  --dir-font-size SIZE     Font size for directory names\n");
     printf("  --user-font-size SIZE    Font size for user names\n");
-    printf("  --font-colour FFFFFF     Font colour used by date and title in hex\n\n");
+    printf("  --font-colour RRGGBB[AA] Font colour used by date and title in hex\n\n");
 
     printf("  --file-extensions          Show filename extensions only\n");
     printf("  --file-extension-fallback  Use filename as extension if the extension\n");
@@ -169,10 +182,10 @@ if(extended_help) {
     printf("  --highlight-user USER    Highlight the names of a particular user\n");
     printf("  --highlight-users        Highlight the names of all users\n\n");
 
-    printf("  --highlight-colour       Font colour for highlighted users in hex.\n");
-    printf("  --selection-colour       Font colour for selected users and files.\n");
-    printf("  --filename-colour        Font colour for filenames.\n");
-    printf("  --dir-colour             Font colour for directories.\n\n");
+    printf("  --highlight-colour RRGGBB       Font colour for highlighted users in hex.\n");
+    printf("  --selection-colour RRGGBB       Font colour for selected users and files.\n");
+    printf("  --filename-colour RRGGBB[AA]    Font colour for filenames.\n");
+    printf("  --dir-colour RRGGBB             Font colour for directories.\n\n");
 
     printf("  --dir-name-depth DEPTH    Draw names of directories down to a specific depth.\n");
     printf("  --dir-name-position FLOAT Position along edge of the directory name\n");
@@ -182,14 +195,14 @@ if(extended_help) {
 
     printf("  --caption-file FILE         Caption file\n");
     printf("  --caption-size SIZE         Caption font size\n");
-    printf("  --caption-colour FFFFFF     Caption colour in hex\n");
+    printf("  --caption-colour RRGGBB[AA] Caption colour in hex\n");
     printf("  --caption-duration SECONDS  Caption duration (default: 10.0)\n");
     printf("  --caption-offset X          Caption horizontal offset\n\n");
 
     printf("  --hash-seed SEED         Change the seed of hash function.\n\n");
-    printf("  --colour-palette HEX,... Comma-separated hex colours for palette.\n");
+    printf("  --colour-palette HEX,... Comma-separated RRGGBB or RRGGBBAA colours.\n");
     printf("  --colour-spread FLOAT    Palette colour variation (0.0-1.0, default: 0.5).\n");
-    printf("  --key-count-colour FFFFFF Key count text colour in hex.\n\n");
+    printf("  --key-count-colour RRGGBB[AA] Key count text colour in hex.\n\n");
 
     printf("  --path PATH\n\n");
 }
@@ -457,7 +470,7 @@ void GourceSettings::setGourceDefaults() {
     user_font_size = 14;
 
     dir_colour       = vec3(1.0f);
-    font_colour      = vec3(1.0f);
+    font_colour      = vec4(1.0f, 1.0f, 1.0f, 1.0f);
     highlight_colour = vec3(1.0f);
     selection_colour = vec3(1.0, 1.0, 0.3f);
 
@@ -488,9 +501,9 @@ void GourceSettings::setGourceDefaults() {
     caption_duration = 10.0f;
     caption_size     = 16;
     caption_offset   = 0;
-    caption_colour   = vec3(1.0f, 1.0f, 1.0f);
+    caption_colour   = vec4(1.0f, 1.0f, 1.0f, 1.0f);
 
-    filename_colour  = vec3(1.0f, 1.0f, 1.0f);
+    filename_colour  = vec4(1.0f, 1.0f, 1.0f, 1.0f);
     filename_time = 4.0f;
 
     gStringHashSeed = 31;
@@ -500,7 +513,7 @@ void GourceSettings::setGourceDefaults() {
     colour_spread = 0.5f;
     gColourSpread = 0.5f;
 
-    key_count_colour = vec3(1.0f, 1.0f, 1.0f);
+    key_count_colour = vec4(1.0f, 1.0f, 1.0f, 1.0f);
     key_count_colour_set = false;
 
     //delete file filters
@@ -920,36 +933,34 @@ void GourceSettings::importGourceSettings(ConfFile& conffile, ConfSection* gourc
 
     if((entry = gource_settings->getEntry("caption-colour")) != 0) {
 
-        if(!entry->hasValue()) conffile.entryException(entry, "specify caption colour (FFFFFF)");
-
-        int r,g,b;
+        if(!entry->hasValue()) conffile.entryException(entry, "specify caption colour (FFFFFF or FFFFFFAA)");
 
         std::string colstring = entry->getString();
+        vec4 parsed;
 
         if(entry->isVec3()) {
-            caption_colour = entry->getVec3();
-        } else if(colstring.size()==6 && sscanf(colstring.c_str(), "%02x%02x%02x", &r, &g, &b) == 3) {
-            caption_colour = vec3(r,g,b);
-            caption_colour /= 255.0f;
+            vec3 v = entry->getVec3();
+            caption_colour = vec4(v, 1.0f);
+        } else if(parseHexColour(colstring, parsed)) {
+            caption_colour = parsed;
         } else {
-            conffile.invalidValueException(entry);
+            conffile.entryException(entry, "specify a 6 or 8 digit hex colour (e.g. FFFFFF or FFFFFFAA)");
         }
     }
 
     if((entry = gource_settings->getEntry("filename-colour")) != 0) {
-        if(!entry->hasValue()) conffile.entryException(entry, "specify filename colour (FFFFFF)");
+        if(!entry->hasValue()) conffile.entryException(entry, "specify filename colour (FFFFFF or FFFFFFAA)");
 
-	int r,g,b;
+        std::string colstring = entry->getString();
+        vec4 parsed;
 
-	std::string colstring = entry->getString();
-
-	if(entry->isVec3()) {
-	    filename_colour = entry->getVec3();
-	} else if(colstring.size()==6 && sscanf(colstring.c_str(), "%02x%02x%02x", &r, &g, &b) == 3) {
-            filename_colour = vec3(r,g,b);
-            filename_colour /= 255.0f;
+        if(entry->isVec3()) {
+            vec3 v = entry->getVec3();
+            filename_colour = vec4(v, 1.0f);
+        } else if(parseHexColour(colstring, parsed)) {
+            filename_colour = parsed;
         } else {
-            conffile.invalidValueException(entry);
+            conffile.entryException(entry, "specify a 6 or 8 digit hex colour (e.g. FFFFFF or FFFFFFAA)");
         }
     }
 
@@ -1096,11 +1107,11 @@ void GourceSettings::importGourceSettings(ConfFile& conffile, ConfSection* gourc
             std::string hex = boost::trim_copy(token);
             if(hex.empty()) continue;
 
-            int r, g, b;
-            if(hex.size() == 6 && sscanf(hex.c_str(), "%02x%02x%02x", &r, &g, &b) == 3) {
-                colour_palette.push_back(vec3(r, g, b) / 255.0f);
+            vec4 parsed;
+            if(parseHexColour(hex, parsed)) {
+                colour_palette.push_back(parsed);
             } else {
-                conffile.entryException(entry, "each colour must be a 6-digit hex value (e.g. FF0000,00FF00,0000FF)");
+                conffile.entryException(entry, "each colour must be a 6 or 8 digit hex value (e.g. FF0000 or FF0000AA)");
             }
         }
 
@@ -1124,39 +1135,37 @@ void GourceSettings::importGourceSettings(ConfFile& conffile, ConfSection* gourc
 
     if((entry = gource_settings->getEntry("key-count-colour")) != 0) {
 
-        if(!entry->hasValue()) conffile.entryException(entry, "specify key count colour (FFFFFF)");
-
-        int r,g,b;
+        if(!entry->hasValue()) conffile.entryException(entry, "specify key count colour (FFFFFF or FFFFFFAA)");
 
         std::string colstring = entry->getString();
+        vec4 parsed;
 
         if(entry->isVec3()) {
-            key_count_colour = entry->getVec3();
+            vec3 v = entry->getVec3();
+            key_count_colour = vec4(v, 1.0f);
             key_count_colour_set = true;
-        } else if(colstring.size()==6 && sscanf(colstring.c_str(), "%02x%02x%02x", &r, &g, &b) == 3) {
-            key_count_colour = vec3(r,g,b);
-            key_count_colour /= 255.0f;
+        } else if(parseHexColour(colstring, parsed)) {
+            key_count_colour = parsed;
             key_count_colour_set = true;
         } else {
-            conffile.entryException(entry, "specify a 6-digit hex colour (e.g. FFFFFF)");
+            conffile.entryException(entry, "specify a 6 or 8 digit hex colour (e.g. FFFFFF or FFFFFFAA)");
         }
     }
 
     if((entry = gource_settings->getEntry("font-colour")) != 0) {
 
-        if(!entry->hasValue()) conffile.entryException(entry, "specify font colour (FFFFFF)");
-
-        int r,g,b;
+        if(!entry->hasValue()) conffile.entryException(entry, "specify font colour (FFFFFF or FFFFFFAA)");
 
         std::string colstring = entry->getString();
+        vec4 parsed;
 
         if(entry->isVec3()) {
-            font_colour = entry->getVec3();
-        } else if(colstring.size()==6 && sscanf(colstring.c_str(), "%02x%02x%02x", &r, &g, &b) == 3) {
-            font_colour = vec3(r,g,b);
-            font_colour /= 255.0f;
+            vec3 v = entry->getVec3();
+            font_colour = vec4(v, 1.0f);
+        } else if(parseHexColour(colstring, parsed)) {
+            font_colour = parsed;
         } else {
-            conffile.invalidValueException(entry);
+            conffile.entryException(entry, "specify a 6 or 8 digit hex colour (e.g. FFFFFF or FFFFFFAA)");
         }
     }
 
@@ -1164,17 +1173,15 @@ void GourceSettings::importGourceSettings(ConfFile& conffile, ConfSection* gourc
 
         if(!entry->hasValue()) conffile.entryException(entry, "specify background colour (FFFFFF)");
 
-        int r,g,b;
-
         std::string colstring = entry->getString();
+        vec4 parsed;
 
         if(entry->isVec3()) {
             background_colour = entry->getVec3();
-        } else if(colstring.size()==6 && sscanf(colstring.c_str(), "%02x%02x%02x", &r, &g, &b) == 3) {
-            background_colour = vec3(r,g,b);
-            background_colour /= 255.0f;
+        } else if(parseHexColour(colstring, parsed)) {
+            background_colour = vec3(parsed.x, parsed.y, parsed.z);
         } else {
-            conffile.invalidValueException(entry);
+            conffile.entryException(entry, "specify a 6 or 8 digit hex colour (e.g. FFFFFF)");
         }
     }
 
@@ -1182,17 +1189,15 @@ void GourceSettings::importGourceSettings(ConfFile& conffile, ConfSection* gourc
 
         if(!entry->hasValue()) conffile.entryException(entry, "specify highlight colour (FFFFFF)");
 
-        int r,g,b;
-
         std::string colstring = entry->getString();
+        vec4 parsed;
 
         if(entry->isVec3()) {
             highlight_colour = entry->getVec3();
-        } else if(colstring.size()==6 && sscanf(colstring.c_str(), "%02x%02x%02x", &r, &g, &b) == 3) {
-            highlight_colour = vec3(r,g,b);
-            highlight_colour /= 255.0f;
+        } else if(parseHexColour(colstring, parsed)) {
+            highlight_colour = vec3(parsed.x, parsed.y, parsed.z);
         } else {
-            conffile.invalidValueException(entry);
+            conffile.entryException(entry, "specify a 6 or 8 digit hex colour (e.g. FFFFFF)");
         }
     }
 
@@ -1200,17 +1205,15 @@ void GourceSettings::importGourceSettings(ConfFile& conffile, ConfSection* gourc
 
         if(!entry->hasValue()) conffile.entryException(entry, "specify selection colour (FFFFFF)");
 
-        int r,g,b;
-
         std::string colstring = entry->getString();
+        vec4 parsed;
 
         if(entry->isVec3()) {
             selection_colour = entry->getVec3();
-        } else if(colstring.size()==6 && sscanf(colstring.c_str(), "%02x%02x%02x", &r, &g, &b) == 3) {
-            selection_colour = vec3(r,g,b);
-            selection_colour /= 255.0f;
+        } else if(parseHexColour(colstring, parsed)) {
+            selection_colour = vec3(parsed.x, parsed.y, parsed.z);
         } else {
-            conffile.invalidValueException(entry);
+            conffile.entryException(entry, "specify a 6 or 8 digit hex colour (e.g. FFFFFF)");
         }
     }
 
@@ -1218,17 +1221,15 @@ void GourceSettings::importGourceSettings(ConfFile& conffile, ConfSection* gourc
 
         if(!entry->hasValue()) conffile.entryException(entry, "specify dir colour (FFFFFF)");
 
-        int r,g,b;
-
         std::string colstring = entry->getString();
+        vec4 parsed;
 
         if(entry->isVec3()) {
             dir_colour = entry->getVec3();
-        } else if(colstring.size()==6 && sscanf(colstring.c_str(), "%02x%02x%02x", &r, &g, &b) == 3) {
-            dir_colour = vec3(r,g,b);
-            dir_colour /= 255.0f;
+        } else if(parseHexColour(colstring, parsed)) {
+            dir_colour = vec3(parsed.x, parsed.y, parsed.z);
         } else {
-            conffile.invalidValueException(entry);
+            conffile.entryException(entry, "specify a 6 or 8 digit hex colour (e.g. FFFFFF)");
         }
     }
 

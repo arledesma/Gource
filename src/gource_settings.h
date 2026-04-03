@@ -111,7 +111,7 @@ public:
     int filename_font_size;
     int dirname_font_size;
     int user_font_size;
-    vec3 font_colour;
+    vec4 font_colour;
     float font_scale;
     bool default_font_scale;
 
@@ -156,12 +156,12 @@ public:
     bool file_extension_fallback;
 
     std::string caption_file;
-    vec3 caption_colour;
+    vec4 caption_colour;
     float caption_duration;
     int caption_size;
     int caption_offset;
 
-    vec3 filename_colour;
+    vec4 filename_colour;
     float filename_time;
 
     std::string output_custom_filename;
@@ -170,10 +170,10 @@ public:
 
     int log_level;
 
-    std::vector<vec3> colour_palette;
+    std::vector<vec4> colour_palette;
     float colour_spread;
 
-    vec3 key_count_colour;
+    vec4 key_count_colour;
     bool key_count_colour_set;
 
     GourceSettings();

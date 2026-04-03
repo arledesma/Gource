@@ -25,8 +25,8 @@
 class RDirNode;
 
 class RFile : public Pawn {
-    vec3 file_colour;
-    vec3 touch_colour;
+    vec4 file_colour;
+    vec4 touch_colour;
 
     RDirNode* dir;
 
@@ -57,19 +57,19 @@ public:
     std::string fullpath;
     std::string ext;
 
-    RFile(const std::string & name, const vec3 & colour, const vec2 & pos, int tagid);
+    RFile(const std::string & name, const vec4 & colour, const vec2 & pos, int tagid);
     ~RFile();
 
     bool overlaps(const vec2& pos) const;
 
-    void setFileColour(const vec3 & colour);
-    const vec3 & getFileColour() const;
-    vec3 getColour() const;
+    void setFileColour(const vec4 & colour);
+    const vec4 & getFileColour() const;
+    vec4 getColour() const;
     void colourize();
 
     float getAlpha() const;
 
-    void touch(time_t touch_timestamp, const vec3& colour);
+    void touch(time_t touch_timestamp, const vec4& colour);
 
     void setHidden(bool hidden);
 

@@ -28,7 +28,7 @@ class RCaption {
 
     vec2 pos;
 
-    vec3 colour;
+    vec4 colour;
     
     FXFont font;
     std::string caption;
