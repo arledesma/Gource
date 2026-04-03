@@ -17,6 +17,7 @@
 
 #include "gource_settings.h"
 #include "core/sdlapp.h"
+#include "core/stringhash.h"
 
 #include <boost/filesystem.hpp>
 #include <boost/format.hpp>
@@ -186,6 +187,9 @@ if(extended_help) {
     printf("  --caption-offset X          Caption horizontal offset\n\n");
 
     printf("  --hash-seed SEED         Change the seed of hash function.\n\n");
+    printf("  --colour-palette HEX,... Comma-separated hex colours for palette.\n");
+    printf("  --colour-spread FLOAT    Palette colour variation (0.0-1.0, default: 0.5).\n");
+    printf("  --key-count-colour FFFFFF Key count text colour in hex.\n\n");
 
     printf("  --path PATH\n\n");
 }
@@ -311,6 +315,9 @@ GourceSettings::GourceSettings() {
     arg_types["dir-font-size"] = "int";
     arg_types["user-font-size"] = "int";
     arg_types["hash-seed"] = "int";
+    arg_types["colour-palette"] = "string";
+    arg_types["colour-spread"]  = "float";
+    arg_types["key-count-colour"] = "string";
 
     arg_types["user-filter"]      = "multi-value";
     arg_types["user-show-filter"] = "multi-value";
@@ -487,6 +494,14 @@ void GourceSettings::setGourceDefaults() {
     filename_time = 4.0f;
 
     gStringHashSeed = 31;
+
+    colour_palette.clear();
+    gColourPalette.clear();
+    colour_spread = 0.5f;
+    gColourSpread = 0.5f;
+
+    key_count_colour = vec3(1.0f, 1.0f, 1.0f);
+    key_count_colour_set = false;
 
     //delete file filters
     for(std::vector<Regex*>::iterator it = file_filters.begin(); it != file_filters.end(); it++) {
@@ -1064,6 +1079,67 @@ void GourceSettings::importGourceSettings(ConfFile& conffile, ConfSection* gourc
         if(!entry->hasValue()) conffile.entryException(entry, "specify hash seed (integer)");
 
         gStringHashSeed = entry->getInt();
+    }
+
+    if((entry = gource_settings->getEntry("colour-palette")) != 0) {
+
+        if(!entry->hasValue()) conffile.entryException(entry, "specify comma-separated hex colours (e.g. FF0000,00FF00,0000FF)");
+
+        std::string palette_string = entry->getString();
+
+        colour_palette.clear();
+
+        std::vector<std::string> tokens;
+        boost::split(tokens, palette_string, boost::is_any_of(","));
+
+        for(const std::string& token : tokens) {
+            std::string hex = boost::trim_copy(token);
+            if(hex.empty()) continue;
+
+            int r, g, b;
+            if(hex.size() == 6 && sscanf(hex.c_str(), "%02x%02x%02x", &r, &g, &b) == 3) {
+                colour_palette.push_back(vec3(r, g, b) / 255.0f);
+            } else {
+                conffile.entryException(entry, "each colour must be a 6-digit hex value (e.g. FF0000,00FF00,0000FF)");
+            }
+        }
+
+        if(colour_palette.empty()) conffile.entryException(entry, "specify at least one hex colour (e.g. FF0000,00FF00,0000FF)");
+
+        gColourPalette = colour_palette;
+    }
+
+    if((entry = gource_settings->getEntry("colour-spread")) != 0) {
+
+        if(!entry->hasValue()) conffile.entryException(entry, "specify colour spread (0.0-1.0)");
+
+        colour_spread = entry->getFloat();
+
+        if(colour_spread < 0.0f || colour_spread > 1.0f) {
+            conffile.entryException(entry, "colour-spread must be between 0.0 and 1.0");
+        }
+
+        gColourSpread = colour_spread;
+    }
+
+    if((entry = gource_settings->getEntry("key-count-colour")) != 0) {
+
+        if(!entry->hasValue()) conffile.entryException(entry, "specify key count colour (FFFFFF)");
+
+        int r,g,b;
+
+        std::string colstring = entry->getString();
+
+        if(entry->isVec3()) {
+            key_count_colour = entry->getVec3();
+            key_count_colour_set = true;
+        } else if(colstring.size()==6 && sscanf(colstring.c_str(), "%02x%02x%02x", &r, &g, &b) == 3) {
+            key_count_colour = vec3(r,g,b);
+            key_count_colour /= 255.0f;
+            key_count_colour_set = true;
+        } else {
+            conffile.entryException(entry, "specify a 6-digit hex colour (e.g. FFFFFF)");
+        }
     }
 
     if((entry = gource_settings->getEntry("font-colour")) != 0) {

@@ -169,7 +169,13 @@ public:
     TextureResource* file_graphic;
 
     int log_level;
-    
+
+    std::vector<vec3> colour_palette;
+    float colour_spread;
+
+    vec3 key_count_colour;
+    bool key_count_colour_set;
+
     GourceSettings();
 
     void setGourceDefaults();

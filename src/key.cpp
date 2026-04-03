@@ -27,7 +27,7 @@ FileKeyEntry::FileKeyEntry(const FXFont& font, const std::string& ext, const vec
 
     show = true;
 
-    display_ext = ext;
+    display_ext = ext.empty() ? std::string("(none)") : ext;
 
     bool truncated = false;
 
@@ -58,7 +58,7 @@ bool FileKeyEntry::isFinished() const {
 }
 
 void FileKeyEntry::colourize() {
-    colour = ext.empty() ? vec3(1.0f, 1.0f, 1.0f) : colourHash(ext);
+    colour = colourHash(ext);
 }
 
 void FileKeyEntry::inc() {
@@ -142,11 +142,26 @@ void FileKeyEntry::draw() {
 
     glEnable(GL_TEXTURE_2D);
 
-    font.setColour(vec4(1.0f, 1.0f, 1.0f, alpha));
+    // switch text to dark when background is bright
+    float lum = 0.299f * colour.x + 0.587f * colour.y + 0.114f * colour.z;
+    vec3 text_col = (lum > 0.5f) ? vec3(0.0f, 0.0f, 0.0f) : vec3(1.0f, 1.0f, 1.0f);
+
+    font.setColour(vec4(text_col, alpha));
 
     font.dropShadow(false);
     font.draw((int)pos.x+2, (int)pos.y+3,  display_ext.c_str());
 
+    vec3 count_col;
+    if(gGourceSettings.key_count_colour_set) {
+        count_col = gGourceSettings.key_count_colour;
+    } else {
+        float bg_lum = 0.299f * gGourceSettings.background_colour.x
+                     + 0.587f * gGourceSettings.background_colour.y
+                     + 0.114f * gGourceSettings.background_colour.z;
+        count_col = (bg_lum > 0.5f) ? vec3(0.0f, 0.0f, 0.0f) : vec3(1.0f, 1.0f, 1.0f);
+    }
+
+    font.setColour(vec4(count_col, alpha));
     font.dropShadow(true);
     font.print((int)pos.x+width+4, (int)pos.y+3, "%d", count);
 }
