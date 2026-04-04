@@ -1,26 +1,14 @@
-*.avi
-*.mpg
-*.mkv
-*.mp4
-gource-*.png
-.objs
-/gource
-/gource.exe
-gource.pro.user
-debug.log
-Makefile
-Makefile.in
-*.dll
-*.dll.a
-logs/*
-/aclocal.m4
-/autom4te.cache
-/configure
-/config.log
-/config.status
-/dev/win64
-/build-aux
+# Binaries
+gource-tui
+gource-tui.exe
+*.exe
+
+# IDE
+.idea/
+.vscode/
 *.swp
-*.d
-.deps
-.dirstamp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
