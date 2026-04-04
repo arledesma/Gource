@@ -34,8 +34,10 @@ type Model struct {
 	cancelPar context.CancelFunc
 	chanDone  bool
 
-	Width  int
-	Height int
+	Width        int
+	Height       int
+	CameraZoom   float64 // 0 = auto-fit, >0 = manual zoom
+	CameraOffset Vec2    // manual pan offset in pixels
 }
 
 type tickMsg time.Time
@@ -95,6 +97,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m *Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	panStep := 30.0
 	switch msg.String() {
 	case "q", "ctrl+c":
 		m.cancelPar()
@@ -105,6 +108,33 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.Playback.SpeedUp()
 	case "-":
 		m.Playback.SlowDown()
+	case "z": // zoom in
+		if m.CameraZoom == 0 {
+			m.CameraZoom = 1.0
+		}
+		m.CameraZoom *= 1.3
+		if m.CameraZoom > 10 {
+			m.CameraZoom = 10
+		}
+	case "x": // zoom out
+		if m.CameraZoom == 0 {
+			m.CameraZoom = 1.0
+		}
+		m.CameraZoom /= 1.3
+		if m.CameraZoom < 0.1 {
+			m.CameraZoom = 0.1
+		}
+	case "up":
+		m.CameraOffset.Y += panStep
+	case "down":
+		m.CameraOffset.Y -= panStep
+	case "left":
+		m.CameraOffset.X += panStep
+	case "right":
+		m.CameraOffset.X -= panStep
+	case "home", "0":
+		m.CameraZoom = 0
+		m.CameraOffset = Vec2{}
 	}
 	return m, nil
 }
