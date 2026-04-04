@@ -1,6 +1,8 @@
 package model
 
 import (
+	"hash/fnv"
+	"math"
 	"sort"
 	"strings"
 	"time"
@@ -15,6 +17,7 @@ type DirNode struct {
 	Files      map[string]*File
 	LastActive time.Time
 	Collapsed  bool
+	Body       PhysicsBody // position for force-directed layout
 }
 
 // NewDirNode creates a directory node.
@@ -39,6 +42,14 @@ func (d *DirNode) InsertFile(path string, now time.Time) *File {
 			dirPath := strings.Join(parts[:i+1], "/")
 			child = NewDirNode(parts[i], dirPath)
 			child.Parent = node
+			// Seed position near parent with deterministic offset based on name
+			h := fnv.New32a()
+			h.Write([]byte(dirPath))
+			angle := float64(h.Sum32()%360) * math.Pi / 180.0
+			child.Body.Pos = Vec2{
+				X: node.Body.Pos.X + math.Cos(angle)*60,
+				Y: node.Body.Pos.Y + math.Sin(angle)*60,
+			}
 			node.Children = append(node.Children, child)
 			sort.Slice(node.Children, func(a, b int) bool {
 				return node.Children[a].Name < node.Children[b].Name

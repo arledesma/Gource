@@ -146,6 +146,25 @@ func (m *Model) tick() {
 		}
 	}
 	m.Actions = remaining
+
+	// Update user positions — move toward their target file
+	for _, u := range m.Users {
+		if !u.Active || u.TargetFile == "" {
+			continue
+		}
+		if f, ok := m.Files[u.TargetFile]; ok {
+			target := Vec2{f.ScreenX - 30, f.ScreenY}
+			delta := target.Sub(u.Body.Pos)
+			dist := delta.Len()
+			if dist > 2.0 {
+				u.Body.ApplyForce(delta.Normalize().Scale(dist * 2.0))
+			}
+			u.Body.Integrate(dt, 0.8)
+		}
+	}
+
+	// Run force-directed layout
+	UpdateLayout(m.Root, dt)
 }
 
 func (m *Model) processCommit(c parser.Commit) {
@@ -155,6 +174,11 @@ func (m *Model) processCommit(c parser.Commit) {
 		m.Users[c.Username] = user
 	}
 	user.Touch(c.Timestamp)
+
+	// Set target to last file in commit
+	if len(c.Files) > 0 {
+		user.TargetFile = c.Files[len(c.Files)-1].Path
+	}
 
 	for _, cf := range c.Files {
 		path := cf.Path

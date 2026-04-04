@@ -28,6 +28,8 @@ type File struct {
 	State      FileState
 	LastAction time.Time
 	RemoveAt   time.Time
+	ScreenX    float64 // computed by layout engine
+	ScreenY    float64
 }
 
 // NewFile creates a file entity from a path.

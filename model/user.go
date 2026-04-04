@@ -14,6 +14,8 @@ type User struct {
 	ActionCount int
 	LastAction  time.Time
 	Active      bool
+	Body        PhysicsBody // position for rendering
+	TargetFile  string      // path of file user is moving toward
 }
 
 // NewUser creates a user entity.
