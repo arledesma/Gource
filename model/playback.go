@@ -27,8 +27,9 @@ func NewPlayback(daysPerSecond float64) *PlaybackState {
 }
 
 // AdvanceTime moves the simulation clock forward by dt real seconds.
+// Does nothing until at least one commit has set the initial time.
 func (p *PlaybackState) AdvanceTime(dt float64) {
-	if p.Paused || p.Finished {
+	if p.Paused || p.Finished || p.TotalCommits == 0 {
 		return
 	}
 	simSeconds := dt * p.DaysPerSecond * 86400
