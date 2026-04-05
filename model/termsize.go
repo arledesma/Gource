@@ -9,87 +9,87 @@ import (
 	"github.com/charmbracelet/x/term"
 )
 
-// TermPixelSize holds the detected terminal pixel dimensions.
+// TermPixelSize holds detected terminal dimensions.
 type TermPixelSize struct {
-	CellW, CellH int // pixel size of one cell
-	PixW, PixH    int // total pixel size of the terminal
+	PixW, PixH   int // total window pixel size (from CSI 14t)
+	CellW, CellH int // cell pixel size (from CSI 16t)
 }
 
-// DetectTermPixelSize queries the terminal for cell pixel dimensions.
+// DetectTermPixelSize queries the terminal for pixel dimensions.
 // Must be called BEFORE tea.Program.Run() takes over stdin.
-// Returns zero values if detection fails.
 func DetectTermPixelSize() TermPixelSize {
 	var result TermPixelSize
 
-	fd := os.Stdin.Fd()
-	oldState, err := term.MakeRaw(fd)
+	fd := int(os.Stdin.Fd())
+	oldState, err := term.MakeRaw(uintptr(fd))
 	if err != nil {
 		return result
 	}
-	defer term.Restore(fd, oldState)
+	defer term.Restore(uintptr(fd), oldState)
 
-	// CSI 16t — report cell size in pixels
-	// Response: CSI 6 ; cellH ; cellW t
-	os.Stdout.WriteString("\x1b[16t")
-	os.Stdout.Sync()
-
-	resp := readResponse(100 * time.Millisecond)
-	if cellW, cellH, ok := parseSizeResponse(resp, "\x1b[6;"); ok {
-		result.CellW = cellW
-		result.CellH = cellH
+	// Query window pixel size: CSI 14 t → response CSI 4 ; height ; width t
+	if w, h := queryCSI("\x1b[14t", "\x1b[4;"); w > 0 && h > 0 {
+		result.PixW = w
+		result.PixH = h
 	}
 
-	// CSI 14t — report terminal pixel size
-	// Response: CSI 4 ; pixH ; pixW t
-	os.Stdout.WriteString("\x1b[14t")
-	os.Stdout.Sync()
-
-	resp = readResponse(100 * time.Millisecond)
-	if pixW, pixH, ok := parseSizeResponse(resp, "\x1b[4;"); ok {
-		result.PixW = pixW
-		result.PixH = pixH
+	// Query cell pixel size: CSI 16 t → response CSI 6 ; height ; width t
+	if w, h := queryCSI("\x1b[16t", "\x1b[6;"); w > 0 && h > 0 {
+		result.CellW = w
+		result.CellH = h
 	}
 
 	return result
 }
 
-func readResponse(timeout time.Duration) string {
-	buf := make([]byte, 128)
-	done := make(chan int, 1)
-	go func() {
-		n, _ := os.Stdin.Read(buf)
-		done <- n
-	}()
+func queryCSI(query, responsePrefix string) (width, height int) {
+	// Flush any pending input
+	os.Stdin.SetReadDeadline(time.Now().Add(10 * time.Millisecond))
+	discard := make([]byte, 256)
+	os.Stdin.Read(discard)
 
-	timer := time.NewTimer(timeout)
-	defer timer.Stop()
-	select {
-	case n := <-done:
-		return string(buf[:n])
-	case <-timer.C:
-		return ""
+	// Send query
+	os.Stdout.WriteString(query)
+	os.Stdout.Sync()
+
+	// Read response with timeout
+	os.Stdin.SetReadDeadline(time.Now().Add(200 * time.Millisecond))
+	buf := make([]byte, 256)
+	total := 0
+	for total < len(buf) {
+		n, err := os.Stdin.Read(buf[total:])
+		total += n
+		if err != nil {
+			break
+		}
+		// Look for 't' terminator
+		if strings.ContainsRune(string(buf[:total]), 't') {
+			break
+		}
 	}
-}
+	// Clear deadline
+	os.Stdin.SetReadDeadline(time.Time{})
 
-func parseSizeResponse(resp, prefix string) (int, int, bool) {
-	idx := strings.Index(resp, prefix)
+	resp := string(buf[:total])
+
+	// Parse: prefix HEIGHT ; WIDTH t
+	idx := strings.Index(resp, responsePrefix)
 	if idx < 0 {
-		return 0, 0, false
+		return 0, 0
 	}
-	resp = resp[idx+len(prefix):]
+	resp = resp[idx+len(responsePrefix):]
 	end := strings.IndexByte(resp, 't')
 	if end < 0 {
-		return 0, 0, false
+		return 0, 0
 	}
 	parts := strings.Split(resp[:end], ";")
 	if len(parts) != 2 {
-		return 0, 0, false
+		return 0, 0
 	}
-	a, err1 := strconv.Atoi(parts[0])
-	b, err2 := strconv.Atoi(parts[1])
-	if err1 != nil || err2 != nil || a <= 0 || b <= 0 {
-		return 0, 0, false
+	h, err1 := strconv.Atoi(parts[0])
+	w, err2 := strconv.Atoi(parts[1])
+	if err1 != nil || err2 != nil || w <= 0 || h <= 0 {
+		return 0, 0
 	}
-	// Response is height;width, return as width,height
-	return b, a, true
+	return w, h
 }
