@@ -14,6 +14,12 @@ import (
 )
 
 func main() {
+	// Subprocess mode for terminal detection — must run before cobra
+	if len(os.Args) == 2 && os.Args[1] == "--detect-term" {
+		model.RunDetectSubprocess()
+		return
+	}
+
 	cfg := config.DefaultSettings()
 
 	rootCmd := &cobra.Command{

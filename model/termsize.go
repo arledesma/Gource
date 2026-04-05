@@ -1,8 +1,9 @@
 package model
 
 import (
+	"fmt"
 	"os"
-	"runtime"
+	"os/exec"
 	"strconv"
 	"strings"
 	"time"
@@ -12,45 +13,56 @@ import (
 
 // TermPixelSize holds detected terminal dimensions.
 type TermPixelSize struct {
-	PixW, PixH   int // total window pixel size (from CSI 14t)
-	CellW, CellH int // cell pixel size (from CSI 16t)
+	PixW, PixH   int
+	CellW, CellH int
 }
 
-// DetectTermPixelSize queries the terminal for pixel dimensions.
-// Must be called BEFORE tea.Program.Run() takes over stdin.
-// Opens a separate handle to the terminal for reading, so stdin
-// remains clean for Bubble Tea.
+// DetectTermPixelSize runs the current executable with --detect-term
+// to query the terminal in a clean subprocess. This prevents any
+// console state corruption from affecting Bubble Tea.
 func DetectTermPixelSize() TermPixelSize {
 	var result TermPixelSize
 
-	// Open a separate read handle to the terminal.
-	// This avoids competing with Bubble Tea for stdin.
-	var ttyPath string
-	if runtime.GOOS == "windows" {
-		ttyPath = "CONIN$"
-	} else {
-		ttyPath = "/dev/tty"
-	}
-
-	tty, err := os.OpenFile(ttyPath, os.O_RDWR, 0)
+	self, err := os.Executable()
 	if err != nil {
 		return result
 	}
-	defer tty.Close()
 
-	fd := tty.Fd()
+	cmd := exec.Command(self, "--detect-term")
+	cmd.Stdin = os.Stdin
+	cmd.Stderr = os.Stderr
+	out, err := cmd.Output()
+	if err != nil {
+		return result
+	}
+
+	parts := strings.Fields(strings.TrimSpace(string(out)))
+	if len(parts) == 4 {
+		result.PixW, _ = strconv.Atoi(parts[0])
+		result.PixH, _ = strconv.Atoi(parts[1])
+		result.CellW, _ = strconv.Atoi(parts[2])
+		result.CellH, _ = strconv.Atoi(parts[3])
+	}
+
+	return result
+}
+
+// RunDetectSubprocess queries the terminal and prints results to stdout.
+// Called when the binary is invoked with --detect-term.
+func RunDetectSubprocess() {
+	fd := os.Stdin.Fd()
 	oldState, err := term.MakeRaw(fd)
 	if err != nil {
-		return result
+		fmt.Println("0 0 0 0")
+		return
 	}
 	defer term.Restore(fd, oldState)
 
-	// Reader goroutine on our private handle — will exit when tty is closed
 	incoming := make(chan byte, 1024)
 	go func() {
 		buf := make([]byte, 1)
 		for {
-			n, err := tty.Read(buf)
+			n, err := os.Stdin.Read(buf)
 			if n > 0 {
 				select {
 				case incoming <- buf[0]:
@@ -63,26 +75,23 @@ func DetectTermPixelSize() TermPixelSize {
 		}
 	}()
 
-	// Drain any buffered input
 	drainChannel(incoming, 20*time.Millisecond)
 
-	// Write queries to our tty handle (goes to the same terminal)
-	// Query window pixel size: CSI 14 t → CSI 4 ; height ; width t
-	tty.WriteString("\x1b[14t")
+	var pixW, pixH, cellW, cellH int
+
+	os.Stderr.WriteString("\x1b[14t")
 	if w, h := parseResponse(incoming, "\x1b[4;", 300*time.Millisecond); w > 0 && h > 0 {
-		result.PixW = w
-		result.PixH = h
+		pixW = w
+		pixH = h
 	}
 
-	// Query cell pixel size: CSI 16 t → CSI 6 ; height ; width t
-	tty.WriteString("\x1b[16t")
+	os.Stderr.WriteString("\x1b[16t")
 	if w, h := parseResponse(incoming, "\x1b[6;", 300*time.Millisecond); w > 0 && h > 0 {
-		result.CellW = w
-		result.CellH = h
+		cellW = w
+		cellH = h
 	}
 
-	// tty.Close() in defer will cause the reader goroutine to exit
-	return result
+	fmt.Printf("%d %d %d %d\n", pixW, pixH, cellW, cellH)
 }
 
 func parseResponse(ch <-chan byte, prefix string, timeout time.Duration) (width, height int) {
