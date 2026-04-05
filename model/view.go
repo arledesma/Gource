@@ -17,11 +17,15 @@ func (m *Model) View() tea.View {
 		return v
 	}
 
-	// Cell pixel size. Default 8x14 is deliberately conservative —
-	// it's better to be slightly small (sharp) than slightly too big (wrapping).
-	// Users can tune up with --cell-size if they want larger output.
+	// Target a fixed output resolution based on terminal cell count.
+	// Rather than guessing cell pixel size (varies wildly by terminal,
+	// font, DPI), we target a resolution that fits any reasonable setup.
+	// Height = rows * 6 pixels. A sixel band is 6px, and even the
+	// smallest terminal cells are at least 6px tall, so this guarantees
+	// the output fits within the terminal.
+	// Users can scale up with --cell-size (e.g. 8x12 or 8x16).
 	cellW := 8
-	cellH := 14
+	cellH := 6
 
 	if m.Settings.CellSize != "" {
 		parts := strings.SplitN(m.Settings.CellSize, "x", 2)
