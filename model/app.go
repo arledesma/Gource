@@ -63,7 +63,10 @@ type Model struct {
 	lastMouseY   int
 	ShowLegend   bool
 	ShowHelp     bool
-	LastFrameMs  float64 // last frame render time in ms
+	LastFrameMs  float64 // render time in ms (image generation)
+	SixelEncMs   float64 // sixel encoding time in ms
+	SixelBytes   int     // sixel output size in bytes
+	TotalFrameMs float64 // full pipeline: render + encode
 	FrameCount   int64
 
 	userFilterRe *regexp.Regexp

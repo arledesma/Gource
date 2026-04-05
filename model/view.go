@@ -86,6 +86,16 @@ func (m *Model) View() tea.View {
 		return v
 	}
 
+	// Resolution scaling: manual --scale flag, with adaptive fallback
+	renderScale := m.Settings.RenderScale
+	if renderScale <= 0 {
+		renderScale = 1.0
+	}
+	// Adaptive: reduce further if frames are slow
+	if m.TotalFrameMs > 80 {
+		renderScale *= 0.75
+	}
+
 	cellW, cellH := detectCellSize()
 
 	// Allow manual override via --cell-size WxH
@@ -103,8 +113,8 @@ func (m *Model) View() tea.View {
 
 	// Convert terminal cell dimensions to pixel dimensions for sixel.
 	// Subtract 1 row to prevent overflow/wrapping.
-	pixW := m.Width * cellW
-	pixH := (m.Height - 1) * cellH
+	pixW := int(float64(m.Width*cellW) * renderScale)
+	pixH := int(float64((m.Height-1)*cellH) * renderScale)
 
 	v.Content = m.RenderFrame(pixW, pixH)
 	return v

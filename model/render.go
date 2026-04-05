@@ -225,11 +225,30 @@ func (m *Model) RenderFrame(width, height int) string {
 		return ""
 	}
 
+	fullStart := time.Now()
+
 	img := m.renderImage(width, height)
 
+	// Downscale for sixel output to reduce encoding time and terminal throughput.
+	// Sixel at full resolution generates huge output; half-res is a good tradeoff.
+	scaledW := width / 2
+	scaledH := height / 2
+	if scaledW < 10 {
+		scaledW = width
+		scaledH = height
+	}
+	scaled := imaging.Resize(img, scaledW, scaledH, imaging.Box)
+
+	encStart := time.Now()
 	var buf bytes.Buffer
+	buf.Grow(scaledW * scaledH) // pre-allocate rough estimate
 	enc := sixel.NewEncoder(&buf)
-	enc.Encode(img)
+	enc.Encode(scaled)
+
+	m.SixelEncMs = float64(time.Since(encStart).Microseconds()) / 1000.0
+	m.SixelBytes = buf.Len()
+	m.TotalFrameMs = float64(time.Since(fullStart).Microseconds()) / 1000.0
+
 	return buf.String()
 }
 
@@ -499,9 +518,10 @@ func (m *Model) drawDateOverlay(dc *gg.Context, width, height int) {
 	if m.Playback.Paused {
 		infoStr += "   PAUSED"
 	}
-	if m.Settings.Debug && m.LastFrameMs > 0 {
-		fps := 1000.0 / m.LastFrameMs
-		infoStr += fmt.Sprintf("   %.0fms (%.0f fps)", m.LastFrameMs, fps)
+	if m.Settings.Debug && m.TotalFrameMs > 0 {
+		fps := 1000.0 / m.TotalFrameMs
+		infoStr += fmt.Sprintf("   %.0fms (r:%.0f s:%.0f %dKB) %.0ffps",
+			m.TotalFrameMs, m.LastFrameMs, m.SixelEncMs, m.SixelBytes/1024, fps)
 	}
 	dc.SetRGB(0.6, 0.65, 0.7)
 	dc.DrawStringAnchored(infoStr, float64(width)-12, float64(height)-barH/2, 1.0, 0.5)

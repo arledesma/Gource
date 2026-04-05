@@ -70,6 +70,7 @@ Requires a sixel-capable terminal (WezTerm, Windows Terminal 1.22+, foot, etc.)`
 	flags.BoolVar(&cfg.Debug, "debug", false, "Show FPS counter and debug info")
 	flags.StringVar(&cfg.CellSize, "cell-size", "", "Override cell pixel size as WxH (e.g. 8x18)")
 	flags.StringVar(&cfg.Theme, "theme", "dark", "Color theme (dark, light, solarized, monokai)")
+	flags.Float64Var(&cfg.RenderScale, "scale", 1.0, "Render resolution scale (0.5 = half res, faster)")
 
 	var startDate, stopDate string
 	flags.StringVar(&startDate, "start-date", "", "Start date (YYYY-MM-DD)")

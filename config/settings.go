@@ -24,8 +24,9 @@ type Settings struct {
 	FileFilter     string
 	Background     string // hex color for background
 	Debug          bool
-	CellSize       string // WxH override for cell pixel dimensions (e.g. "8x18")
-	Theme          string // color theme name
+	CellSize       string  // WxH override for cell pixel dimensions (e.g. "8x18")
+	Theme          string  // color theme name
+	RenderScale    float64 // output resolution scale (0.5 = half res, 1.0 = full)
 }
 
 // DefaultSettings returns sensible defaults.
@@ -37,5 +38,6 @@ func DefaultSettings() Settings {
 		FileIdleTime:  60.0,
 		UserIdleTime:  10.0,
 		TickRate:      time.Second / 30,
+		RenderScale:   1.0,
 	}
 }
