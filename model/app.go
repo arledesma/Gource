@@ -111,6 +111,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyPressMsg:
 		return m.handleKey(msg)
 
+	case tea.MouseClickMsg:
+		return m.handleMouseClick(msg)
+
 	case tea.MouseWheelMsg:
 		return m.handleMouseWheel(msg)
 
@@ -177,6 +180,45 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.ShowHelp = !m.ShowHelp
 	}
 	return m, nil
+}
+
+func (m *Model) handleMouseClick(msg tea.MouseClickMsg) (tea.Model, tea.Cmd) {
+	mouse := msg.Mouse()
+
+	// Check if click is in the bottom 2 rows (status bar area)
+	if mouse.Y >= m.Height-2 {
+		// Map click X to progress bar position
+		// Progress bar starts at ~20 cells from left, ends ~35 cells from right
+		barStartCells := 20
+		barEndCells := m.Width - 35
+		barWidth := barEndCells - barStartCells
+
+		if barWidth > 0 && mouse.X >= barStartCells && mouse.X <= barEndCells {
+			progress := float64(mouse.X-barStartCells) / float64(barWidth)
+			m.Playback.SeekTo(progress)
+
+			// Clear the tree and rebuild from commits up to the seek point
+			m.resetVisualization()
+			for _, c := range m.Playback.AllCommits {
+				if c.Timestamp.After(m.Playback.CurrTime) {
+					break
+				}
+				m.processCommit(c)
+			}
+		}
+	}
+
+	return m, nil
+}
+
+func (m *Model) resetVisualization() {
+	m.Root = NewDirNode("", "")
+	m.Files = make(map[string]*File)
+	m.Users = make(map[string]*User)
+	m.Actions = nil
+	m.Activity = nil
+	m.Particles.Particles = nil
+	m.UserSprings = make(map[string]*UserSpring)
 }
 
 func (m *Model) handleMouseWheel(msg tea.MouseWheelMsg) (tea.Model, tea.Cmd) {

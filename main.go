@@ -68,6 +68,7 @@ Requires a sixel-capable terminal (WezTerm, Windows Terminal 1.22+, foot, etc.)`
 	flags.BoolVar(&cfg.HideDate, "hide-date", false, "Hide the date overlay")
 	flags.BoolVar(&cfg.HideProgress, "hide-progress", false, "Hide the progress bar")
 	flags.BoolVar(&cfg.Debug, "debug", false, "Show FPS counter and debug info")
+	flags.StringVar(&cfg.CellSize, "cell-size", "", "Override cell pixel size as WxH (e.g. 8x18)")
 
 	var startDate, stopDate string
 	flags.StringVar(&startDate, "start-date", "", "Start date (YYYY-MM-DD)")
