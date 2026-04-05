@@ -2,6 +2,7 @@ package model
 
 import (
 	"os"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -17,32 +18,43 @@ type TermPixelSize struct {
 
 // DetectTermPixelSize queries the terminal for pixel dimensions.
 // Must be called BEFORE tea.Program.Run() takes over stdin.
+// Opens a separate handle to the terminal for reading, so stdin
+// remains clean for Bubble Tea.
 func DetectTermPixelSize() TermPixelSize {
 	var result TermPixelSize
 
-	fd := uintptr(os.Stdin.Fd())
+	// Open a separate read handle to the terminal.
+	// This avoids competing with Bubble Tea for stdin.
+	var ttyPath string
+	if runtime.GOOS == "windows" {
+		ttyPath = "CONIN$"
+	} else {
+		ttyPath = "/dev/tty"
+	}
+
+	tty, err := os.OpenFile(ttyPath, os.O_RDWR, 0)
+	if err != nil {
+		return result
+	}
+	defer tty.Close()
+
+	fd := tty.Fd()
 	oldState, err := term.MakeRaw(fd)
 	if err != nil {
 		return result
 	}
 	defer term.Restore(fd, oldState)
 
-	// Start a background reader that reads stdin byte-by-byte.
-	// This avoids blocking issues with SetReadDeadline on Windows.
-	// The goroutine will exit when we restore the terminal (the raw mode
-	// fd becomes invalid or the next Read returns an error).
+	// Reader goroutine on our private handle — will exit when tty is closed
 	incoming := make(chan byte, 1024)
-	done := make(chan struct{})
 	go func() {
-		defer close(done)
 		buf := make([]byte, 1)
 		for {
-			n, err := os.Stdin.Read(buf)
+			n, err := tty.Read(buf)
 			if n > 0 {
 				select {
 				case incoming <- buf[0]:
 				default:
-					// Channel full, drop byte
 				}
 			}
 			if err != nil {
@@ -51,30 +63,28 @@ func DetectTermPixelSize() TermPixelSize {
 		}
 	}()
 
-	// Small delay to let any buffered input arrive
+	// Drain any buffered input
 	drainChannel(incoming, 20*time.Millisecond)
 
+	// Write queries to our tty handle (goes to the same terminal)
 	// Query window pixel size: CSI 14 t → CSI 4 ; height ; width t
-	os.Stdout.WriteString("\x1b[14t")
-	os.Stdout.Sync()
+	tty.WriteString("\x1b[14t")
 	if w, h := parseResponse(incoming, "\x1b[4;", 300*time.Millisecond); w > 0 && h > 0 {
 		result.PixW = w
 		result.PixH = h
 	}
 
 	// Query cell pixel size: CSI 16 t → CSI 6 ; height ; width t
-	os.Stdout.WriteString("\x1b[16t")
-	os.Stdout.Sync()
+	tty.WriteString("\x1b[16t")
 	if w, h := parseResponse(incoming, "\x1b[6;", 300*time.Millisecond); w > 0 && h > 0 {
 		result.CellW = w
 		result.CellH = h
 	}
 
+	// tty.Close() in defer will cause the reader goroutine to exit
 	return result
 }
 
-// parseResponse reads bytes from the channel until it finds a complete
-// CSI response matching the prefix, or times out.
 func parseResponse(ch <-chan byte, prefix string, timeout time.Duration) (width, height int) {
 	deadline := time.After(timeout)
 	var buf []byte
@@ -85,7 +95,6 @@ func parseResponse(ch <-chan byte, prefix string, timeout time.Duration) (width,
 			buf = append(buf, b)
 			s := string(buf)
 
-			// Look for complete response: prefix + H;W + 't'
 			idx := strings.Index(s, prefix)
 			if idx < 0 {
 				continue
@@ -96,7 +105,6 @@ func parseResponse(ch <-chan byte, prefix string, timeout time.Duration) (width,
 				continue
 			}
 
-			// Parse "height;width"
 			parts := strings.Split(after[:tIdx], ";")
 			if len(parts) != 2 {
 				return 0, 0
