@@ -18,6 +18,7 @@ type DirNode struct {
 	LastActive time.Time
 	Collapsed  bool
 	Body       PhysicsBody // position for force-directed layout
+	Depth      int         // tree depth (root=0)
 }
 
 // NewDirNode creates a directory node.
@@ -42,13 +43,22 @@ func (d *DirNode) InsertFile(path string, now time.Time) *File {
 			dirPath := strings.Join(parts[:i+1], "/")
 			child = NewDirNode(parts[i], dirPath)
 			child.Parent = node
-			// Seed position near parent with deterministic offset based on name
+			child.Depth = node.Depth + 1
+			// Seed position using sibling index for even angular distribution
+			siblingIdx := len(node.Children)
+			totalSiblings := siblingIdx + 1
+			// Use golden angle for even distribution as siblings are added
+			goldenAngle := math.Pi * (3.0 - math.Sqrt(5.0)) // ~137.5 degrees
+			angle := float64(siblingIdx) * goldenAngle
+			// Add small hash-based jitter to prevent exact overlaps
 			h := fnv.New32a()
 			h.Write([]byte(dirPath))
-			angle := float64(h.Sum32()%360) * math.Pi / 180.0
+			jitter := (float64(h.Sum32()%100) - 50) / 50.0 * 0.3
+			angle += jitter
+			dist := 80.0 + float64(totalSiblings)*10.0
 			child.Body.Pos = Vec2{
-				X: node.Body.Pos.X + math.Cos(angle)*60,
-				Y: node.Body.Pos.Y + math.Sin(angle)*60,
+				X: node.Body.Pos.X + math.Cos(angle)*dist,
+				Y: node.Body.Pos.Y + math.Sin(angle)*dist,
 			}
 			node.Children = append(node.Children, child)
 			sort.Slice(node.Children, func(a, b int) bool {

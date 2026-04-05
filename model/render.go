@@ -144,7 +144,17 @@ func (m *Model) renderImage(width, height int) image.Image {
 	loadFonts()
 
 	dc := gg.NewContext(width, height)
-	dc.SetRGB(0.05, 0.05, 0.08)
+	// Background color
+	if m.Settings.Background != "" {
+		bgColor := config.ColorForExtension("") // fallback
+		if c := parseHexToRGB(m.Settings.Background); c != nil {
+			bgColor = c
+		}
+		r, g, b, _ := bgColor.RGBA()
+		dc.SetRGB(float64(r)/0xFFFF, float64(g)/0xFFFF, float64(b)/0xFFFF)
+	} else {
+		dc.SetRGB(0.05, 0.05, 0.08)
+	}
 	dc.Clear()
 
 	cam := m.computeCamera(float64(width), float64(height))
@@ -295,6 +305,7 @@ func (m *Model) drawFiles(dc *gg.Context, node *DirNode, cam camera) {
 func (m *Model) drawDirNodes(dc *gg.Context, node *DirNode, cam camera) {
 	if node.Name != "" || node.Parent != nil {
 		x, y := cam.worldToScreen(node.Body.Pos.X, node.Body.Pos.Y)
+		ds := depthScale(node.Depth)
 
 		maxHeat := 0.0
 		for _, f := range node.Files {
@@ -305,7 +316,7 @@ func (m *Model) drawDirNodes(dc *gg.Context, node *DirNode, cam camera) {
 
 		// Dir glow
 		if maxHeat > 0.1 {
-			glowR := (dirNodeRadius + maxHeat*8.0) * cam.scale
+			glowR := (dirNodeRadius*ds + maxHeat*8.0) * cam.scale
 			dc.SetRGBA(0.4, 0.6, 0.9, maxHeat*0.25)
 			dc.DrawCircle(x, y, glowR)
 			dc.Fill()
@@ -313,7 +324,7 @@ func (m *Model) drawDirNodes(dc *gg.Context, node *DirNode, cam camera) {
 
 		alpha := 0.4 + maxHeat*0.6
 		dc.SetRGBA(0.3, 0.5, 0.8, alpha)
-		dc.DrawCircle(x, y, dirNodeRadius*cam.scale)
+		dc.DrawCircle(x, y, dirNodeRadius*ds*cam.scale)
 		dc.Fill()
 	}
 	for _, child := range node.Children {
@@ -647,4 +658,24 @@ func applyBloom(src image.Image, sigma, intensity float64) image.Image {
 	}
 
 	return result
+}
+
+// depthScale returns a size multiplier based on tree depth (deeper = smaller).
+func depthScale(depth int) float64 {
+	return math.Pow(0.85, float64(depth))
+}
+
+func parseHexToRGB(hex string) imgcolor.Color {
+	if len(hex) > 0 && hex[0] == '#' {
+		hex = hex[1:]
+	}
+	if len(hex) != 6 {
+		return nil
+	}
+	var r, g, b uint8
+	_, err := fmt.Sscanf(hex, "%02x%02x%02x", &r, &g, &b)
+	if err != nil {
+		return nil
+	}
+	return imgcolor.RGBA{R: r, G: g, B: b, A: 255}
 }

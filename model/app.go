@@ -4,6 +4,7 @@ import (
 	"context"
 	"image/color"
 	"math"
+	"regexp"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
@@ -55,6 +56,9 @@ type Model struct {
 	CameraOffset Vec2    // manual pan offset in pixels
 	ShowLegend   bool
 	ShowHelp     bool
+
+	userFilterRe *regexp.Regexp
+	fileFilterRe *regexp.Regexp
 }
 
 type tickMsg time.Time
@@ -66,7 +70,7 @@ func New(cfg config.Settings, p parser.Parser) *Model {
 	ctx, cancel := context.WithCancel(context.Background())
 	ch := p.Stream(ctx)
 
-	return &Model{
+	m := &Model{
 		Settings:    cfg,
 		Root:        NewDirNode("", ""),
 		Files:       make(map[string]*File),
@@ -76,6 +80,15 @@ func New(cfg config.Settings, p parser.Parser) *Model {
 		commitCh:    ch,
 		cancelPar:   cancel,
 	}
+
+	if cfg.UserFilter != "" {
+		m.userFilterRe, _ = regexp.Compile(cfg.UserFilter)
+	}
+	if cfg.FileFilter != "" {
+		m.fileFilterRe, _ = regexp.Compile(cfg.FileFilter)
+	}
+
+	return m
 }
 
 func (m *Model) Init() tea.Cmd {
@@ -208,7 +221,14 @@ func (m *Model) tick() {
 	}
 
 	if m.chanDone && len(m.Playback.CommitQueue) == 0 && m.Playback.Elapsed > 0 {
-		m.Playback.Finished = true
+		if m.Settings.Loop {
+			// Reset for loop
+			m.Playback.CurrTime = m.Playback.StartTime
+			m.Playback.Elapsed = 0
+			m.Playback.Finished = false
+		} else {
+			m.Playback.Finished = true
+		}
 	}
 
 	// Heat decay
@@ -273,6 +293,11 @@ func (m *Model) tick() {
 }
 
 func (m *Model) processCommit(c parser.Commit) {
+	// Filter by user regex
+	if m.userFilterRe != nil && !m.userFilterRe.MatchString(c.Username) {
+		return
+	}
+
 	user, exists := m.Users[c.Username]
 	if !exists {
 		user = NewUser(c.Username, c.Timestamp)
@@ -285,6 +310,10 @@ func (m *Model) processCommit(c parser.Commit) {
 	}
 
 	for _, cf := range c.Files {
+		// Filter by file regex
+		if m.fileFilterRe != nil && !m.fileFilterRe.MatchString(cf.Path) {
+			continue
+		}
 		path := cf.Path
 
 		f, exists := m.Files[path]
