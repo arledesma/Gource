@@ -34,13 +34,15 @@ func main() {
 	ch := p.Stream(ctx)
 
 	m := &model.Model{
-		Settings: cfg,
-		Root:     model.NewDirNode("", ""),
-		Files:    make(map[string]*model.File),
-		Users:    make(map[string]*model.User),
-		Playback: model.NewPlayback(cfg.DaysPerSecond),
-		Width:    120,
-		Height:   40,
+		Settings:    cfg,
+		Root:        model.NewDirNode("", ""),
+		Files:       make(map[string]*model.File),
+		Users:       make(map[string]*model.User),
+		Playback:    model.NewPlayback(cfg.DaysPerSecond),
+		Captions:    model.NewCaptionSystem(5),
+		UserSprings: make(map[string]*model.UserSpring),
+		Width:       120,
+		Height:      40,
 	}
 
 	// Read all commits

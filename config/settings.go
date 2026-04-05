@@ -25,6 +25,7 @@ type Settings struct {
 	Background     string // hex color for background
 	Debug          bool
 	CellSize       string // WxH override for cell pixel dimensions (e.g. "8x18")
+	Theme          string // color theme name
 }
 
 // DefaultSettings returns sensible defaults.

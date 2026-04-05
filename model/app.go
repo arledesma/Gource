@@ -2,8 +2,11 @@ package model
 
 import (
 	"context"
+	"fmt"
 	"image/color"
+	"image/png"
 	"math"
+	"os"
 	"regexp"
 	"time"
 
@@ -42,6 +45,7 @@ type Model struct {
 	Playback *PlaybackState
 	Activity []ActivityEntry
 	Particles ParticleSystem
+	Captions  *CaptionSystem
 
 	// User animation springs (keyed by username)
 	UserSprings map[string]*UserSpring
@@ -78,6 +82,7 @@ func New(cfg config.Settings, p parser.Parser) *Model {
 		Files:       make(map[string]*File),
 		Users:       make(map[string]*User),
 		Playback:    NewPlayback(cfg.DaysPerSecond),
+		Captions:    NewCaptionSystem(5),
 		UserSprings: make(map[string]*UserSpring),
 		commitCh:    ch,
 		cancelPar:   cancel,
@@ -178,37 +183,73 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.ShowLegend = !m.ShowLegend
 	case "?":
 		m.ShowHelp = !m.ShowHelp
+	case "[": // seek back 5%
+		m.seekToProgress(m.Playback.Progress() - 0.05)
+	case "]": // seek forward 5%
+		m.seekToProgress(m.Playback.Progress() + 0.05)
+	case "s": // screenshot
+		m.saveScreenshot()
 	}
 	return m, nil
 }
 
 func (m *Model) handleMouseClick(msg tea.MouseClickMsg) (tea.Model, tea.Cmd) {
-	mouse := msg.Mouse()
+	// MouseClickMsg embeds Mouse directly — fields are X, Y, Button
+	clickX := msg.X
+	clickY := msg.Y
 
 	// Check if click is in the bottom 2 rows (status bar area)
-	if mouse.Y >= m.Height-2 {
+	if clickY >= m.Height-2 {
 		// Map click X to progress bar position
-		// Progress bar starts at ~20 cells from left, ends ~35 cells from right
-		barStartCells := 20
-		barEndCells := m.Width - 35
-		barWidth := barEndCells - barStartCells
+		// Progress bar in pixel space starts at barX=160px and ends at width-280px
+		// Convert from cell coordinates to fractional position across the bar
+		barStartFrac := 160.0 / float64(m.Width*8)  // approximate
+		barEndFrac := 1.0 - 280.0/float64(m.Width*8)
 
-		if barWidth > 0 && mouse.X >= barStartCells && mouse.X <= barEndCells {
-			progress := float64(mouse.X-barStartCells) / float64(barWidth)
-			m.Playback.SeekTo(progress)
+		frac := float64(clickX) / float64(m.Width)
 
-			// Clear the tree and rebuild from commits up to the seek point
-			m.resetVisualization()
-			for _, c := range m.Playback.AllCommits {
-				if c.Timestamp.After(m.Playback.CurrTime) {
-					break
-				}
-				m.processCommit(c)
-			}
+		if frac >= barStartFrac && frac <= barEndFrac {
+			progress := (frac - barStartFrac) / (barEndFrac - barStartFrac)
+			m.seekToProgress(progress)
 		}
 	}
 
 	return m, nil
+}
+
+func (m *Model) seekToProgress(progress float64) {
+	m.Playback.SeekTo(progress)
+	m.resetVisualization()
+
+	// Replay all commits up to the seek point
+	for _, c := range m.Playback.AllCommits {
+		if c.Timestamp.After(m.Playback.CurrTime) {
+			break
+		}
+		m.processCommit(c)
+	}
+
+	// Run a few layout iterations so the graph isn't all clumped at origin
+	for range 30 {
+		UpdateLayout(m.Root, 1.0/30.0)
+	}
+}
+
+func (m *Model) saveScreenshot() {
+	cellW, cellH := detectCellSize()
+	pixW := m.Width * cellW
+	pixH := (m.Height - 1) * cellH
+	img := m.renderImage(pixW, pixH)
+
+	ts := time.Now().Format("20060102-150405")
+	filename := fmt.Sprintf("gource-tui-%s.png", ts)
+
+	f, err := os.Create(filename)
+	if err != nil {
+		return
+	}
+	defer f.Close()
+	png.Encode(f, img)
 }
 
 func (m *Model) resetVisualization() {
@@ -218,6 +259,7 @@ func (m *Model) resetVisualization() {
 	m.Actions = nil
 	m.Activity = nil
 	m.Particles.Particles = nil
+	m.Captions = NewCaptionSystem(5)
 	m.UserSprings = make(map[string]*UserSpring)
 }
 
@@ -332,8 +374,9 @@ func (m *Model) tick() {
 		u.Body.Pos.Y, spring.VelY = spring.SpringY.Update(u.Body.Pos.Y, spring.VelY, spring.TargetY)
 	}
 
-	// Update particles
+	// Update particles and captions
 	m.Particles.Update(dt)
+	m.Captions.Update(dt)
 
 	// Run force-directed layout
 	UpdateLayout(m.Root, dt)
@@ -354,6 +397,15 @@ func (m *Model) processCommit(c parser.Commit) {
 
 	if len(c.Files) > 0 {
 		user.TargetFile = c.Files[len(c.Files)-1].Path
+	}
+
+	// Add commit message caption near user
+	if c.Message != "" {
+		msg := c.Message
+		if len(msg) > 60 {
+			msg = msg[:57] + "..."
+		}
+		m.Captions.Add(msg, user.Body.Pos, user.Color)
 	}
 
 	for _, cf := range c.Files {

@@ -151,16 +151,18 @@ func (m *Model) renderImage(width, height int) image.Image {
 	loadFonts()
 
 	dc := gg.NewContext(width, height)
-	// Background color
+
+	// Background: --background flag overrides theme
+	theme := config.GetTheme(m.Settings.Theme)
 	if m.Settings.Background != "" {
-		bgColor := config.ColorForExtension("") // fallback
 		if c := parseHexToRGB(m.Settings.Background); c != nil {
-			bgColor = c
+			r, g, b, _ := c.RGBA()
+			dc.SetRGB(float64(r)/0xFFFF, float64(g)/0xFFFF, float64(b)/0xFFFF)
+		} else {
+			dc.SetRGB(float64(theme.Background.R)/255, float64(theme.Background.G)/255, float64(theme.Background.B)/255)
 		}
-		r, g, b, _ := bgColor.RGBA()
-		dc.SetRGB(float64(r)/0xFFFF, float64(g)/0xFFFF, float64(b)/0xFFFF)
 	} else {
-		dc.SetRGB(0.05, 0.05, 0.08)
+		dc.SetRGB(float64(theme.Background.R)/255, float64(theme.Background.G)/255, float64(theme.Background.B)/255)
 	}
 	dc.Clear()
 
@@ -205,6 +207,15 @@ func (m *Model) renderImage(width, height int) image.Image {
 		m.drawHelp(dc, width, height)
 	}
 
+	// Captions (commit messages)
+	dc.SetFontFace(fontSmall)
+	m.drawCaptions(dc, cam)
+
+	// Minimap
+	if m.CameraZoom > 0 {
+		m.drawMinimap(dc, width, height, cam)
+	}
+
 	return dc.Image()
 }
 
@@ -228,12 +239,13 @@ func (m *Model) RenderToPNG(width, height int) image.Image {
 }
 
 func (m *Model) drawEdges(dc *gg.Context, node *DirNode, cam camera) {
+	theme := config.GetTheme(m.Settings.Theme)
 	for _, child := range node.Children {
 		// Edge brightness based on activity
 		heat := child.EdgeHeat
-		r := 0.3 + heat*0.5
-		g := 0.4 + heat*0.4
-		b := 0.5 + heat*0.5
+		r := theme.EdgeColor[0] + heat*0.5
+		g := theme.EdgeColor[1] + heat*0.4
+		b := theme.EdgeColor[2] + heat*0.5
 		alpha := edgeAlpha + heat*0.5
 		dc.SetRGBA(r, g, b, alpha)
 		lw := 1.5 + heat*2.0
@@ -344,8 +356,9 @@ func (m *Model) drawDirNodes(dc *gg.Context, node *DirNode, cam camera) {
 			dc.Fill()
 		}
 
+		theme := config.GetTheme(m.Settings.Theme)
 		alpha := 0.4 + maxHeat*0.6
-		dc.SetRGBA(0.3, 0.5, 0.8, alpha)
+		dc.SetRGBA(theme.DirNode[0], theme.DirNode[1], theme.DirNode[2], alpha)
 		dc.DrawCircle(x, y, dirNodeRadius*ds*cam.scale)
 		dc.Fill()
 	}
@@ -402,9 +415,10 @@ func (m *Model) drawUsers(dc *gg.Context, cam camera) {
 }
 
 func (m *Model) drawLabels(dc *gg.Context, node *DirNode, cam camera) {
+	theme := config.GetTheme(m.Settings.Theme)
 	if node.Name != "" {
 		x, y := cam.worldToScreen(node.Body.Pos.X, node.Body.Pos.Y)
-		dc.SetRGBA(0.7, 0.8, 1.0, 0.85)
+		dc.SetRGBA(theme.DirLabel[0], theme.DirLabel[1], theme.DirLabel[2], theme.DirLabel[3])
 		dc.DrawStringAnchored(node.Name, x, y-dirNodeRadius*cam.scale-6, 0.5, 1.0)
 	}
 	for _, child := range node.Children {
@@ -430,12 +444,13 @@ func (m *Model) drawFileLabels(dc *gg.Context, node *DirNode, cam camera) {
 }
 
 func (m *Model) drawUserLabels(dc *gg.Context, cam camera) {
+	theme := config.GetTheme(m.Settings.Theme)
 	for _, u := range m.Users {
 		if !u.Active {
 			continue
 		}
 		x, y := cam.worldToScreen(u.Body.Pos.X, u.Body.Pos.Y)
-		dc.SetRGBA(1, 1, 1, 0.9)
+		dc.SetRGBA(theme.UserLabel[0], theme.UserLabel[1], theme.UserLabel[2], theme.UserLabel[3])
 		dc.DrawStringAnchored(u.Name, x, y-userRadius*cam.scale-5, 0.5, 1.0)
 	}
 }
@@ -585,9 +600,13 @@ func (m *Model) drawHelp(dc *gg.Context, width, height int) {
 		"",
 		"Space     Pause/Resume",
 		"+/-       Speed up/down",
+		"[ / ]     Seek back/forward 5%",
 		"z/x       Zoom in/out",
+		"Scroll    Zoom in/out",
 		"Arrows    Pan camera",
 		"Home      Reset camera",
+		"Click bar Seek to position",
+		"s         Save screenshot",
 		"l         Toggle legend",
 		"?         Toggle help",
 		"q         Quit",
@@ -621,6 +640,101 @@ func (m *Model) drawHelp(dc *gg.Context, width, height int) {
 			dc.DrawString(line, px+16, y)
 		}
 	}
+}
+
+func (m *Model) drawCaptions(dc *gg.Context, cam camera) {
+	for i, cap := range m.Captions.Visible() {
+		x, y := cam.worldToScreen(cap.Pos.X, cap.Pos.Y)
+		// Stack captions vertically so they don't overlap
+		y -= 20 + float64(i)*14
+
+		r, g, b, _ := cap.Color.RGBA()
+		dc.SetRGBA(float64(r)/0xFFFF, float64(g)/0xFFFF, float64(b)/0xFFFF, cap.Alpha*0.7)
+		dc.DrawStringAnchored(cap.Text, x, y, 0.5, 0.5)
+	}
+}
+
+func (m *Model) drawMinimap(dc *gg.Context, width, height int, mainCam camera) {
+	// Minimap dimensions
+	mmW := 120.0
+	mmH := 90.0
+	mmX := float64(width) - mmW - 10
+	mmY := float64(height) - mmH - 36 // above status bar
+
+	// Background
+	dc.SetRGBA(0, 0, 0, 0.5)
+	dc.DrawRoundedRectangle(mmX, mmY, mmW, mmH, 4)
+	dc.Fill()
+
+	// Compute minimap camera (auto-fit all nodes into minimap rect)
+	minX, minY := math.Inf(1), math.Inf(1)
+	maxX, maxY := math.Inf(-1), math.Inf(-1)
+	var expandBounds func(node *DirNode)
+	expandBounds = func(node *DirNode) {
+		px, py := node.Body.Pos.X, node.Body.Pos.Y
+		if px < minX { minX = px }
+		if py < minY { minY = py }
+		if px > maxX { maxX = px }
+		if py > maxY { maxY = py }
+		for _, child := range node.Children {
+			expandBounds(child)
+		}
+	}
+	expandBounds(m.Root)
+
+	boundsW := maxX - minX
+	boundsH := maxY - minY
+	if boundsW < 1 { boundsW = 1 }
+	if boundsH < 1 { boundsH = 1 }
+
+	mmScale := math.Min((mmW-8)/boundsW, (mmH-8)/boundsH)
+	mmCenterX := (minX + maxX) / 2
+	mmCenterY := (minY + maxY) / 2
+	mmOx := mmX + mmW/2 - mmCenterX*mmScale
+	mmOy := mmY + mmH/2 - mmCenterY*mmScale
+
+	// Draw nodes as dots
+	var drawDots func(node *DirNode)
+	drawDots = func(node *DirNode) {
+		sx := node.Body.Pos.X*mmScale + mmOx
+		sy := node.Body.Pos.Y*mmScale + mmOy
+		if sx >= mmX && sx <= mmX+mmW && sy >= mmY && sy <= mmY+mmH {
+			dc.SetRGBA(0.4, 0.6, 0.9, 0.6)
+			dc.DrawCircle(sx, sy, 1.5)
+			dc.Fill()
+		}
+		for _, child := range node.Children {
+			drawDots(child)
+		}
+	}
+	drawDots(m.Root)
+
+	// Draw viewport rectangle
+	// Map the main camera's visible area to minimap coords
+	if mainCam.scale > 0 {
+		// Visible area in world coords
+		vwLeft := -mainCam.ox / mainCam.scale
+		vwTop := -mainCam.oy / mainCam.scale
+		vwRight := (float64(width) - mainCam.ox) / mainCam.scale
+		vwBottom := (float64(height) - mainCam.oy) / mainCam.scale
+
+		// Map to minimap
+		rx := vwLeft*mmScale + mmOx
+		ry := vwTop*mmScale + mmOy
+		rw := (vwRight - vwLeft) * mmScale
+		rh := (vwBottom - vwTop) * mmScale
+
+		dc.SetRGBA(1, 1, 1, 0.3)
+		dc.SetLineWidth(1)
+		dc.DrawRectangle(rx, ry, rw, rh)
+		dc.Stroke()
+	}
+
+	// Border
+	dc.SetRGBA(0.3, 0.4, 0.5, 0.5)
+	dc.SetLineWidth(1)
+	dc.DrawRoundedRectangle(mmX, mmY, mmW, mmH, 4)
+	dc.Stroke()
 }
 
 // applyBloom creates a bloom glow effect using a downscaled blur for performance.

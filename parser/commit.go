@@ -16,5 +16,6 @@ type CommitFile struct {
 type Commit struct {
 	Timestamp time.Time
 	Username  string
+	Message   string // first line of commit message (if available)
 	Files     []CommitFile
 }

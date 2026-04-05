@@ -29,7 +29,7 @@ func (p *GitParser) Stream(ctx context.Context) <-chan Commit {
 			"--encoding=UTF-8",
 			"--no-renames",
 			"--no-show-signature",
-			"--pretty=format:user:%aN%n%ct",
+			"--pretty=format:user:%aN%n%ct%nmsg:%s",
 		}
 
 		if p.StartDate != "" {
@@ -82,6 +82,14 @@ func (p *GitParser) Stream(ctx context.Context) <-chan Commit {
 				current = &Commit{
 					Timestamp: time.Unix(ts, 0),
 					Username:  username,
+				}
+
+				// Next line may be msg:subject
+				if scanner.Scan() {
+					msgLine := scanner.Text()
+					if strings.HasPrefix(msgLine, "msg:") {
+						current.Message = msgLine[4:]
+					}
 				}
 				continue
 			}

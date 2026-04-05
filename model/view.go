@@ -80,6 +80,7 @@ func queryCellSize() (int, int) {
 func (m *Model) View() tea.View {
 	v := tea.NewView("Loading...")
 	v.AltScreen = true
+	v.MouseMode = tea.MouseModeCellMotion
 
 	if m.Width == 0 || m.Height == 0 {
 		return v
