@@ -229,14 +229,28 @@ func (m *Model) RenderFrame(width, height int) string {
 
 	img := m.renderImage(width, height)
 
-	// Downscale for sixel output to reduce encoding time and terminal throughput.
-	// Sixel at full resolution generates huge output; half-res is a good tradeoff.
-	scaledW := width / 2
-	scaledH := height / 2
-	if scaledW < 10 {
-		scaledW = width
-		scaledH = height
+	// Downscale for sixel output.
+	// The sixel image pixel height determines how many terminal rows it
+	// occupies. We target (termRows - 1) rows of output. Since we don't
+	// know the exact cell pixel height, we use the sixel band height (6px)
+	// as the minimum: each terminal row is at least 1 sixel band.
+	// Most terminals have 2-3 sixel bands per cell row (12-18px cells).
+	// Using 2 bands/row is conservative and prevents wrapping.
+	sixelBandsPerRow := 2
+	maxSixelH := (m.termRows - 1) * sixelBandsPerRow * 6
+	if maxSixelH < 60 {
+		maxSixelH = height / 2
 	}
+
+	// Scale width proportionally
+	aspect := float64(width) / float64(height)
+	scaledH := maxSixelH
+	scaledW := int(float64(scaledH) * aspect)
+	if scaledW < 10 {
+		scaledW = width / 2
+		scaledH = height / 2
+	}
+
 	scaled := imaging.Resize(img, scaledW, scaledH, imaging.Box)
 
 	encStart := time.Now()

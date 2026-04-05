@@ -17,7 +17,7 @@ func (m *Model) View() tea.View {
 		return v
 	}
 
-	// Resolution scaling: manual --scale flag, with adaptive fallback
+	// Resolution scaling
 	renderScale := m.Settings.RenderScale
 	if renderScale <= 0 {
 		renderScale = 1.0
@@ -26,12 +26,12 @@ func (m *Model) View() tea.View {
 		renderScale *= 0.75
 	}
 
-	// Cell pixel size: use --cell-size override or reasonable default.
-	// The CSI 16t query conflicts with Bubble Tea's input loop, so we
-	// don't attempt it. Default of 8x16 is conservative (most common).
+	// Cell pixel size for internal rendering resolution.
+	// This controls how many pixels we generate before sixel encoding.
+	// The sixel output is further halved in RenderFrame.
+	// Default 8x16 is conservative — override with --cell-size if needed.
 	cellW := 8
 	cellH := 16
-
 	if m.Settings.CellSize != "" {
 		parts := strings.SplitN(m.Settings.CellSize, "x", 2)
 		if len(parts) == 2 {
@@ -44,12 +44,15 @@ func (m *Model) View() tea.View {
 		}
 	}
 
-	// Render dimensions in pixels.
-	// Subtract 2 rows: 1 for safety margin, 1 because Bubble Tea's cursor
-	// positioning can add a line. The sixel output is further halved in
-	// RenderFrame for encoding efficiency.
+	// Internal render dimensions (full res for quality).
 	pixW := int(float64(m.Width*cellW) * renderScale)
-	pixH := int(float64((m.Height-2)*cellH) * renderScale)
+	pixH := int(float64(m.Height*cellH) * renderScale)
+
+	// The sixel output size (after halving in RenderFrame) must fit
+	// within the terminal. We pass the terminal dimensions so
+	// RenderFrame can clamp the sixel output size.
+	m.termRows = m.Height
+	m.termCols = m.Width
 
 	v.Content = m.RenderFrame(pixW, pixH)
 	return v
