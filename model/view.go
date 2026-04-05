@@ -17,11 +17,18 @@ func (m *Model) View() tea.View {
 		return v
 	}
 
-	var pixW, pixH int
+	// Determine cell pixel size. Priority:
+	// 1. --cell-size flag
+	// 2. Detected via CSI 16t at startup
+	// 3. Fallback 8x6 (one sixel band — guaranteed to fit)
+	cellW, cellH := 8, 6
+
+	if m.Settings.DetectedCellW > 0 && m.Settings.DetectedCellH > 0 {
+		cellW = m.Settings.DetectedCellW
+		cellH = m.Settings.DetectedCellH
+	}
 
 	if m.Settings.CellSize != "" {
-		// Explicit override — highest priority
-		cellW, cellH := 8, 16
 		parts := strings.SplitN(m.Settings.CellSize, "x", 2)
 		if len(parts) == 2 {
 			if w, err := strconv.Atoi(parts[0]); err == nil && w > 0 {
@@ -31,21 +38,13 @@ func (m *Model) View() tea.View {
 				cellH = h
 			}
 		}
-		pixW = m.Width * cellW
-		pixH = (m.Height - 1) * cellH
-	} else if m.Settings.DetectedPixW > 0 && m.Settings.DetectedPixH > 0 {
-		// Detected window pixel size — use directly
-		pixW = m.Settings.DetectedPixW
-		pixH = m.Settings.DetectedPixH
-	} else if m.Settings.DetectedCellW > 0 && m.Settings.DetectedCellH > 0 {
-		// Detected cell size — compute from cells
-		pixW = m.Width * m.Settings.DetectedCellW
-		pixH = (m.Height - 1) * m.Settings.DetectedCellH
-	} else {
-		// Fallback: one sixel band per row (guaranteed to fit)
-		pixW = m.Width * 8
-		pixH = (m.Height - 2) * 6
 	}
+
+	// Compute pixel dimensions from current cell count × cell pixel size.
+	// Width/Height update on resize via WindowSizeMsg, so this adapts
+	// automatically. Subtract 1 row for safety margin.
+	pixW := m.Width * cellW
+	pixH := (m.Height - 1) * cellH
 
 	// Apply render scale
 	scale := m.Settings.RenderScale
