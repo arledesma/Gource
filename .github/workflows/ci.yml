@@ -36,28 +36,18 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-        with:
-          fetch-depth: 0
 
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
           go-version: "1.24"
 
-      - name: Generate calver tag
-        id: calver
-        run: |
-          TAG=$(date -u +%Y.%m.%d)
-          # Append build number if tag already exists
-          COUNT=$(git tag -l "${TAG}.*" | wc -l)
-          if git rev-parse "${TAG}" >/dev/null 2>&1; then
-            TAG="${TAG}.$((COUNT + 1))"
-          fi
-          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
-          echo "Generated tag: ${TAG}"
+      - name: Set version
+        id: version
+        run: echo "version=$(date -u +%Y.%m.%d)-$(echo $GITHUB_SHA | head -c 7)" >> "$GITHUB_OUTPUT"
 
       - name: Build binaries
         env:
-          VERSION: ${{ steps.calver.outputs.tag }}
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
           LDFLAGS="-X main.version=${VERSION}"
           GOOS=linux GOARCH=amd64 go build -ldflags "${LDFLAGS}" -o gource-tui-linux-amd64 .
@@ -65,15 +55,20 @@ jobs:
           GOOS=darwin GOARCH=arm64 go build -ldflags "${LDFLAGS}" -o gource-tui-darwin-arm64 .
           GOOS=windows GOARCH=amd64 go build -ldflags "${LDFLAGS}" -o gource-tui-windows-amd64.exe .
 
-      - name: Create release
-        uses: softprops/action-gh-release@153bb8e04406b158c6c84fc1615b65b24149a1fe # v2
-        with:
-          tag_name: ${{ steps.calver.outputs.tag }}
-          name: ${{ steps.calver.outputs.tag }}
-          files: |
-            gource-tui-linux-amd64
-            gource-tui-darwin-amd64
-            gource-tui-darwin-arm64
+      - name: Update release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Delete existing release if present
+          gh release delete latest --yes 2>/dev/null || true
+          git push origin :refs/tags/latest 2>/dev/null || true
+
+          # Create new release
+          gh release create latest \
+            --title "Latest (${{ steps.version.outputs.version }})" \
+            --notes "Built from ${{ github.sha }}" \
+            --latest \
+            gource-tui-linux-amd64 \
+            gource-tui-darwin-amd64 \
+            gource-tui-darwin-arm64 \
             gource-tui-windows-amd64.exe
-          generate_release_notes: true
-          make_latest: true
