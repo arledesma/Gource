@@ -27,15 +27,23 @@ func DetectTermPixelSize() TermPixelSize {
 	}
 	defer term.Restore(fd, oldState)
 
-	// Start a background reader that continuously reads stdin.
+	// Start a background reader that reads stdin byte-by-byte.
 	// This avoids blocking issues with SetReadDeadline on Windows.
+	// The goroutine will exit when we restore the terminal (the raw mode
+	// fd becomes invalid or the next Read returns an error).
 	incoming := make(chan byte, 1024)
+	done := make(chan struct{})
 	go func() {
+		defer close(done)
 		buf := make([]byte, 1)
 		for {
 			n, err := os.Stdin.Read(buf)
 			if n > 0 {
-				incoming <- buf[0]
+				select {
+				case incoming <- buf[0]:
+				default:
+					// Channel full, drop byte
+				}
 			}
 			if err != nil {
 				return
