@@ -1,4 +1,4 @@
-module github.com/acaudwell/gource-tui
+module github.com/arledesma/gource-tui
 
 go 1.26.1
 

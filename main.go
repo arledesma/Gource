@@ -8,9 +8,9 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/spf13/cobra"
 
-	"github.com/acaudwell/gource-tui/config"
-	"github.com/acaudwell/gource-tui/model"
-	"github.com/acaudwell/gource-tui/parser"
+	"github.com/arledesma/gource-tui/config"
+	"github.com/arledesma/gource-tui/model"
+	"github.com/arledesma/gource-tui/parser"
 )
 
 func main() {

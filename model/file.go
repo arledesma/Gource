@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/acaudwell/gource-tui/config"
+	"github.com/arledesma/gource-tui/config"
 )
 
 // FileState represents the lifecycle state of a file.

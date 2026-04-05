@@ -4,7 +4,7 @@ import (
 	"image/color"
 	"time"
 
-	"github.com/acaudwell/gource-tui/config"
+	"github.com/arledesma/gource-tui/config"
 )
 
 // User represents a contributor in the visualization.

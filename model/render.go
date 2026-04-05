@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/acaudwell/gource-tui/config"
+	"github.com/arledesma/gource-tui/config"
 	"github.com/disintegration/imaging"
 	"github.com/fogleman/gg"
 	"github.com/mattn/go-sixel"

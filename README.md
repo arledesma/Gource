@@ -40,10 +40,14 @@ A terminal-based source control visualization tool inspired by [Gource](https://
 
 ## Install
 
-Build from source:
+```sh
+go install github.com/arledesma/gource-tui@latest
+```
+
+Or build from source:
 
 ```sh
-git clone <repo-url>
+git clone git@github.com:arledesma/gource-tui.git
 cd gource-tui
 go build -o gource-tui .
 ```

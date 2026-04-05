@@ -3,7 +3,7 @@ package model
 import (
 	"time"
 
-	"github.com/acaudwell/gource-tui/parser"
+	"github.com/arledesma/gource-tui/parser"
 )
 
 // PlaybackState manages simulation time and commit queue.

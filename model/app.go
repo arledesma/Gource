@@ -13,8 +13,8 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/harmonica"
 
-	"github.com/acaudwell/gource-tui/config"
-	"github.com/acaudwell/gource-tui/parser"
+	"github.com/arledesma/gource-tui/config"
+	"github.com/arledesma/gource-tui/parser"
 )
 
 // ActivityEntry represents a line in the activity log.

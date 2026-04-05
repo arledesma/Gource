@@ -7,9 +7,9 @@ import (
 	"os"
 	"time"
 
-	"github.com/acaudwell/gource-tui/config"
-	"github.com/acaudwell/gource-tui/model"
-	"github.com/acaudwell/gource-tui/parser"
+	"github.com/arledesma/gource-tui/config"
+	"github.com/arledesma/gource-tui/model"
+	"github.com/arledesma/gource-tui/parser"
 )
 
 // Standalone tool to render a single frame as PNG for testing.
