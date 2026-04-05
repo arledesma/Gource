@@ -58,6 +58,9 @@ type Model struct {
 	Height       int
 	CameraZoom   float64 // 0 = auto-fit, >0 = manual zoom
 	CameraOffset Vec2    // manual pan offset in pixels
+	dragging     bool
+	lastMouseX   int
+	lastMouseY   int
 	ShowLegend   bool
 	ShowHelp     bool
 	LastFrameMs  float64 // last frame render time in ms
@@ -118,6 +121,13 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.MouseClickMsg:
 		return m.handleMouseClick(msg)
+
+	case tea.MouseMotionMsg:
+		return m.handleMouseMotion(msg)
+
+	case tea.MouseReleaseMsg:
+		m.dragging = false
+		return m, nil
 
 	case tea.MouseWheelMsg:
 		return m.handleMouseWheel(msg)
@@ -194,25 +204,46 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m *Model) handleMouseClick(msg tea.MouseClickMsg) (tea.Model, tea.Cmd) {
-	// MouseClickMsg embeds Mouse directly — fields are X, Y, Button
 	clickX := msg.X
 	clickY := msg.Y
 
-	// Check if click is in the bottom 2 rows (status bar area)
+	// Check if click is in the bottom 2 rows (status bar / progress bar)
 	if clickY >= m.Height-2 {
-		// Map click X to progress bar position
-		// Progress bar in pixel space starts at barX=160px and ends at width-280px
-		// Convert from cell coordinates to fractional position across the bar
-		barStartFrac := 160.0 / float64(m.Width*8)  // approximate
+		barStartFrac := 160.0 / float64(m.Width*8)
 		barEndFrac := 1.0 - 280.0/float64(m.Width*8)
-
 		frac := float64(clickX) / float64(m.Width)
 
 		if frac >= barStartFrac && frac <= barEndFrac {
 			progress := (frac - barStartFrac) / (barEndFrac - barStartFrac)
 			m.seekToProgress(progress)
+			return m, nil
 		}
 	}
+
+	// Start drag for panning
+	if msg.Button == tea.MouseLeft {
+		m.dragging = true
+		m.lastMouseX = clickX
+		m.lastMouseY = clickY
+	}
+
+	return m, nil
+}
+
+func (m *Model) handleMouseMotion(msg tea.MouseMotionMsg) (tea.Model, tea.Cmd) {
+	if !m.dragging {
+		return m, nil
+	}
+
+	dx := msg.X - m.lastMouseX
+	dy := msg.Y - m.lastMouseY
+	m.lastMouseX = msg.X
+	m.lastMouseY = msg.Y
+
+	// Convert cell delta to pixel delta (approximate)
+	cellW, cellH := detectCellSize()
+	m.CameraOffset.X += float64(dx * cellW)
+	m.CameraOffset.Y += float64(dy * cellH)
 
 	return m, nil
 }
