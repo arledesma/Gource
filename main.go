@@ -13,6 +13,8 @@ import (
 	"github.com/arledesma/gource-tui/parser"
 )
 
+var version = "dev"
+
 func main() {
 	// Subprocess mode for terminal detection — must run before cobra
 	if len(os.Args) == 2 && os.Args[1] == "--detect-term" {
@@ -29,7 +31,8 @@ func main() {
 with bloom effects, using sixel graphics in your terminal.
 
 Requires a sixel-capable terminal (WezTerm, Windows Terminal 1.22+, foot, etc.)`,
-		Args: cobra.MaximumNArgs(1),
+		Version: version,
+		Args:    cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) > 0 {
 				cfg.Path = args[0]

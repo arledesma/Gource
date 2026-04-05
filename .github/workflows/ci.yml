@@ -43,23 +43,37 @@ jobs:
         with:
           go-version: "1.24"
 
-      - name: Build binaries
+      - name: Generate calver tag
+        id: calver
         run: |
-          GOOS=linux GOARCH=amd64 go build -o gource-tui-linux-amd64 .
-          GOOS=darwin GOARCH=amd64 go build -o gource-tui-darwin-amd64 .
-          GOOS=darwin GOARCH=arm64 go build -o gource-tui-darwin-arm64 .
-          GOOS=windows GOARCH=amd64 go build -o gource-tui-windows-amd64.exe .
+          TAG=$(date -u +%Y.%m.%d)
+          # Append build number if tag already exists
+          COUNT=$(git tag -l "${TAG}.*" | wc -l)
+          if git rev-parse "${TAG}" >/dev/null 2>&1; then
+            TAG="${TAG}.$((COUNT + 1))"
+          fi
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "Generated tag: ${TAG}"
+
+      - name: Build binaries
+        env:
+          VERSION: ${{ steps.calver.outputs.tag }}
+        run: |
+          LDFLAGS="-X main.version=${VERSION}"
+          GOOS=linux GOARCH=amd64 go build -ldflags "${LDFLAGS}" -o gource-tui-linux-amd64 .
+          GOOS=darwin GOARCH=amd64 go build -ldflags "${LDFLAGS}" -o gource-tui-darwin-amd64 .
+          GOOS=darwin GOARCH=arm64 go build -ldflags "${LDFLAGS}" -o gource-tui-darwin-arm64 .
+          GOOS=windows GOARCH=amd64 go build -ldflags "${LDFLAGS}" -o gource-tui-windows-amd64.exe .
 
       - name: Create release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: latest
-          name: Latest Build
+          tag_name: ${{ steps.calver.outputs.tag }}
+          name: ${{ steps.calver.outputs.tag }}
           files: |
             gource-tui-linux-amd64
             gource-tui-darwin-amd64
             gource-tui-darwin-arm64
             gource-tui-windows-amd64.exe
           generate_release_notes: true
-          prerelease: true
           make_latest: true
