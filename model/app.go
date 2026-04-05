@@ -6,6 +6,7 @@ import (
 	"image/color"
 	"image/png"
 	"math"
+	"math/rand"
 	"os"
 	"regexp"
 	"time"
@@ -66,6 +67,8 @@ type Model struct {
 	termPixH     int // actual terminal pixel height (0 = unknown)
 	ShowLegend   bool
 	ShowHelp     bool
+	ShowUsers    bool
+	Stars        []Vec2 // static background star positions (normalized 0-1)
 	LastFrameMs  float64 // render time in ms (image generation)
 	SixelEncMs   float64 // sixel encoding time in ms
 	SixelBytes   int     // sixel output size in bytes
@@ -85,6 +88,17 @@ func New(cfg config.Settings, p parser.Parser) *Model {
 	ctx, cancel := context.WithCancel(context.Background())
 	ch := p.Stream(ctx)
 
+	// Apply FPS to tick rate
+	if cfg.FPS > 0 {
+		cfg.TickRate = time.Second / time.Duration(cfg.FPS)
+	}
+
+	// Generate static star field
+	stars := make([]Vec2, 80)
+	for i := range stars {
+		stars[i] = Vec2{rand.Float64(), rand.Float64()}
+	}
+
 	m := &Model{
 		Settings:    cfg,
 		Root:        NewDirNode("", ""),
@@ -93,6 +107,7 @@ func New(cfg config.Settings, p parser.Parser) *Model {
 		Playback:    NewPlayback(cfg.DaysPerSecond),
 		Captions:    NewCaptionSystem(5),
 		UserSprings: make(map[string]*UserSpring),
+		Stars:       stars,
 		commitCh:    ch,
 		cancelPar:   cancel,
 	}
@@ -199,6 +214,8 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.ShowLegend = !m.ShowLegend
 	case "?":
 		m.ShowHelp = !m.ShowHelp
+	case "u":
+		m.ShowUsers = !m.ShowUsers
 	case "[": // seek back 5%
 		m.seekToProgress(m.Playback.Progress() - 0.05)
 	case "]": // seek forward 5%

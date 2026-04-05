@@ -20,6 +20,7 @@ type DirNode struct {
 	Body       PhysicsBody // position for force-directed layout
 	Depth      int         // tree depth (root=0)
 	EdgeHeat   float64     // glow intensity on edge to parent (0-1)
+	Pulse      float64     // pulse animation timer (1.0 → 0.0)
 }
 
 // NewDirNode creates a directory node.
@@ -168,16 +169,21 @@ func (d *DirNode) PropagateEdgeHeat() {
 		if node.EdgeHeat < heat {
 			node.EdgeHeat = heat
 		}
+		node.Pulse = 1.0
 		heat *= 0.7
 		node = node.Parent
 	}
 }
 
-// DecayEdgeHeat reduces edge heat across the tree.
+// DecayEdgeHeat reduces edge heat and pulse across the tree.
 func (d *DirNode) DecayEdgeHeat(rate float64) {
 	d.EdgeHeat *= rate
 	if d.EdgeHeat < 0.01 {
 		d.EdgeHeat = 0
+	}
+	d.Pulse *= 0.92
+	if d.Pulse < 0.01 {
+		d.Pulse = 0
 	}
 	for _, child := range d.Children {
 		child.DecayEdgeHeat(rate)

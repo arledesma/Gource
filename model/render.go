@@ -166,6 +166,9 @@ func (m *Model) renderImage(width, height int) image.Image {
 	}
 	dc.Clear()
 
+	// Background star field
+	m.drawStars(dc, width, height)
+
 	cam := m.computeCamera(float64(width), float64(height))
 
 	// Draw layers back-to-front
@@ -202,6 +205,9 @@ func (m *Model) renderImage(width, height int) image.Image {
 	}
 	if m.ShowLegend {
 		m.drawLegend(dc, width)
+	}
+	if m.ShowUsers {
+		m.drawUserList(dc, width)
 	}
 	if m.ShowHelp {
 		m.drawHelp(dc, width, height)
@@ -349,8 +355,7 @@ func (m *Model) drawFiles(dc *gg.Context, node *DirNode, cam camera) {
 			radius += f.Heat * 3.0 * cam.scale
 		}
 		dc.SetRGBA(rf, gf, bf, alpha)
-		dc.DrawCircle(x, y, radius)
-		dc.Fill()
+		drawFileShape(dc, x, y, radius, f.Extension)
 	}
 	for _, child := range node.Children {
 		m.drawFiles(dc, child, cam)
@@ -390,9 +395,12 @@ func (m *Model) drawDirNodes(dc *gg.Context, node *DirNode, cam camera) {
 			return // don't draw children
 		}
 
+		// Pulse expansion
+		pulseScale := 1.0 + node.Pulse*0.4
+
 		// Dir glow
 		if maxHeat > 0.1 {
-			glowR := (dirNodeRadius*ds + maxHeat*8.0) * cam.scale
+			glowR := (dirNodeRadius*ds*pulseScale + maxHeat*8.0) * cam.scale
 			dc.SetRGBA(0.4, 0.6, 0.9, maxHeat*0.25)
 			dc.DrawCircle(x, y, glowR)
 			dc.Fill()
@@ -400,7 +408,7 @@ func (m *Model) drawDirNodes(dc *gg.Context, node *DirNode, cam camera) {
 
 		alpha := 0.4 + maxHeat*0.6
 		dc.SetRGBA(theme.DirNode[0], theme.DirNode[1], theme.DirNode[2], alpha)
-		dc.DrawCircle(x, y, dirNodeRadius*ds*cam.scale)
+		dc.DrawCircle(x, y, dirNodeRadius*ds*pulseScale*cam.scale)
 		dc.Fill()
 	}
 	for _, child := range node.Children {
@@ -472,7 +480,14 @@ func (m *Model) drawLabels(dc *gg.Context, node *DirNode, cam camera) {
 	if node.Name != "" {
 		x, y := cam.worldToScreen(node.Body.Pos.X, node.Body.Pos.Y)
 		dc.SetRGBA(theme.DirLabel[0], theme.DirLabel[1], theme.DirLabel[2], theme.DirLabel[3])
-		dc.DrawStringAnchored(node.Name, x, y-dirNodeRadius*cam.scale-6, 0.5, 1.0)
+		label := node.Name
+		if count := node.TotalFiles(); count > 0 {
+			label = fmt.Sprintf("%s (%d)", node.Name, count)
+		}
+		dc.DrawStringAnchored(label, x, y-dirNodeRadius*cam.scale-6, 0.5, 1.0)
+	}
+	if node.Collapsed {
+		return
 	}
 	for _, child := range node.Children {
 		m.drawLabels(dc, child, cam)
@@ -515,6 +530,16 @@ func (m *Model) drawDateOverlay(dc *gg.Context, width, height int) {
 
 	dateStr := m.Playback.CurrTime.Format("2006-01-02")
 
+	// Elapsed / remaining
+	if !m.Playback.StartTime.IsZero() && !m.Playback.EndTime.IsZero() {
+		totalDays := m.Playback.EndTime.Sub(m.Playback.StartTime).Hours() / 24
+		elapsedDays := m.Playback.CurrTime.Sub(m.Playback.StartTime).Hours() / 24
+		if elapsedDays < 0 {
+			elapsedDays = 0
+		}
+		dateStr += fmt.Sprintf("  (day %d/%d)", int(elapsedDays), int(totalDays))
+	}
+
 	// Background bar
 	barH := 28.0
 	dc.SetRGBA(0, 0, 0, 0.7)
@@ -534,10 +559,50 @@ func (m *Model) drawDateOverlay(dc *gg.Context, width, height int) {
 		dc.DrawRoundedRectangle(barX, float64(height)-barH/2-6, barW, 12, 4)
 		dc.Fill()
 
+		// Activity heatmap: draw commit density as colored ticks
+		if len(m.Playback.AllCommits) > 0 && !m.Playback.StartTime.IsZero() {
+			totalDur := m.Playback.EndTime.Sub(m.Playback.StartTime).Seconds()
+			if totalDur > 0 {
+				bins := int(barW / 2)
+				if bins > 200 {
+					bins = 200
+				}
+				counts := make([]int, bins)
+				maxCount := 1
+				for _, c := range m.Playback.AllCommits {
+					frac := c.Timestamp.Sub(m.Playback.StartTime).Seconds() / totalDur
+					bin := int(frac * float64(bins))
+					if bin >= bins {
+						bin = bins - 1
+					}
+					if bin >= 0 {
+						counts[bin]++
+						if counts[bin] > maxCount {
+							maxCount = counts[bin]
+						}
+					}
+				}
+				for i, count := range counts {
+					if count == 0 {
+						continue
+					}
+					intensity := float64(count) / float64(maxCount)
+					bx := barX + float64(i)*barW/float64(bins)
+					bw := barW / float64(bins)
+					dc.SetRGBA(0.2+intensity*0.3, 0.3+intensity*0.4, 0.5+intensity*0.5, 0.4+intensity*0.4)
+					dc.DrawRectangle(bx, float64(height)-barH/2-6, bw, 12)
+					dc.Fill()
+				}
+			}
+		}
+
+		// Progress indicator line
 		if progress > 0 {
-			dc.SetRGBA(0.3, 0.6, 1.0, 0.9)
-			dc.DrawRoundedRectangle(barX, float64(height)-barH/2-6, barW*progress, 12, 4)
-			dc.Fill()
+			px := barX + barW*progress
+			dc.SetRGBA(1.0, 1.0, 1.0, 0.9)
+			dc.SetLineWidth(2)
+			dc.DrawLine(px, float64(height)-barH/2-7, px, float64(height)-barH/2+7)
+			dc.Stroke()
 		}
 	}
 
@@ -657,11 +722,14 @@ func (m *Model) drawHelp(dc *gg.Context, width, height int) {
 		"[ / ]     Seek back/forward 5%",
 		"z/x       Zoom in/out",
 		"Scroll    Zoom in/out",
+		"Drag      Pan camera",
 		"Arrows    Pan camera",
 		"Home      Reset camera",
 		"Click bar Seek to position",
+		"Click dir Collapse/expand",
 		"s         Save screenshot",
 		"l         Toggle legend",
+		"u         Toggle user list",
 		"?         Toggle help",
 		"q         Quit",
 	}
@@ -789,6 +857,128 @@ func (m *Model) drawMinimap(dc *gg.Context, width, height int, mainCam camera) {
 	dc.SetLineWidth(1)
 	dc.DrawRoundedRectangle(mmX, mmY, mmW, mmH, 4)
 	dc.Stroke()
+}
+
+// drawFileShape draws a shape based on file type category.
+func drawFileShape(dc *gg.Context, x, y, radius float64, ext string) {
+	switch fileCategory(ext) {
+	case "config":
+		// Square
+		dc.DrawRectangle(x-radius, y-radius, radius*2, radius*2)
+	case "doc":
+		// Triangle
+		dc.MoveTo(x, y-radius)
+		dc.LineTo(x+radius, y+radius)
+		dc.LineTo(x-radius, y+radius)
+		dc.ClosePath()
+	case "image":
+		// Diamond
+		dc.MoveTo(x, y-radius)
+		dc.LineTo(x+radius, y)
+		dc.LineTo(x, y+radius)
+		dc.LineTo(x-radius, y)
+		dc.ClosePath()
+	default:
+		// Circle (source code and everything else)
+		dc.DrawCircle(x, y, radius)
+	}
+	dc.Fill()
+}
+
+func fileCategory(ext string) string {
+	switch ext {
+	case ".json", ".yaml", ".yml", ".toml", ".xml", ".ini", ".cfg", ".conf",
+		".env", ".properties", ".dockerfile", ".mk", ".cmake", ".tf":
+		return "config"
+	case ".md", ".txt", ".rst", ".adoc", ".org", ".tex", ".pdf", ".doc", ".docx":
+		return "doc"
+	case ".png", ".jpg", ".jpeg", ".gif", ".svg", ".ico", ".bmp", ".webp",
+		".tga", ".xcf", ".psd", ".ai":
+		return "image"
+	default:
+		return "source"
+	}
+}
+
+func (m *Model) drawStars(dc *gg.Context, width, height int) {
+	for _, s := range m.Stars {
+		x := s.X * float64(width)
+		y := s.Y * float64(height)
+		// Varying brightness based on position hash
+		brightness := 0.15 + (s.X+s.Y)*0.1
+		if brightness > 0.35 {
+			brightness = 0.35
+		}
+		dc.SetRGBA(0.7, 0.75, 0.85, brightness)
+		dc.DrawCircle(x, y, 0.8)
+		dc.Fill()
+	}
+}
+
+func (m *Model) drawUserList(dc *gg.Context, width int) {
+	// Collect active users sorted by action count
+	type userEntry struct {
+		name  string
+		count int
+		color [3]float64
+	}
+	var entries []userEntry
+	for _, u := range m.Users {
+		if u.Active {
+			r, g, b, _ := u.Color.RGBA()
+			entries = append(entries, userEntry{
+				name:  u.Name,
+				count: u.ActionCount,
+				color: [3]float64{float64(r) / 0xFFFF, float64(g) / 0xFFFF, float64(b) / 0xFFFF},
+			})
+		}
+	}
+	if len(entries) == 0 {
+		return
+	}
+
+	// Sort by action count descending
+	for i := 0; i < len(entries); i++ {
+		for j := i + 1; j < len(entries); j++ {
+			if entries[j].count > entries[i].count {
+				entries[i], entries[j] = entries[j], entries[i]
+			}
+		}
+	}
+	if len(entries) > 20 {
+		entries = entries[:20]
+	}
+
+	lineH := 16.0
+	panelW := 160.0
+	panelH := float64(len(entries))*lineH + 30
+	px := float64(width) - panelW - 10
+	py := 10.0
+
+	dc.SetRGBA(0, 0, 0, 0.6)
+	dc.DrawRoundedRectangle(px, py, panelW, panelH, 6)
+	dc.Fill()
+
+	dc.SetFontFace(fontSmall)
+	dc.SetRGBA(0.7, 0.8, 0.9, 0.9)
+	dc.DrawStringAnchored("Active Users", px+panelW/2, py+12, 0.5, 0.5)
+
+	for i, e := range entries {
+		y := py + 26 + float64(i)*lineH
+
+		// Color dot
+		dc.SetRGBA(e.color[0], e.color[1], e.color[2], 0.9)
+		dc.DrawCircle(px+12, y, 4)
+		dc.Fill()
+
+		// Name and count
+		name := e.name
+		if len(name) > 14 {
+			name = name[:13] + "…"
+		}
+		dc.SetRGBA(0.8, 0.8, 0.8, 0.8)
+		dc.DrawString(fmt.Sprintf("%s  %d", name, e.count), px+22, y+4)
+	}
 }
 
 // applyBloom creates a bloom glow effect using a downscaled blur for performance.

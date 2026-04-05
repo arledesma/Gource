@@ -13,6 +13,7 @@ type Settings struct {
 	StartDate      time.Time
 	StopDate       time.Time
 	TickRate       time.Duration
+	FPS            int
 	Loop           bool
 	NoBloom        bool
 	HideFilenames  bool
@@ -43,6 +44,7 @@ func DefaultSettings() Settings {
 		AutoSkip:      3.0,
 		FileIdleTime:  60.0,
 		UserIdleTime:  10.0,
+		FPS:           30,
 		TickRate:      time.Second / 30,
 		RenderScale:   1.0,
 	}
