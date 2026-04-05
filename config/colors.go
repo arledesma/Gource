@@ -1,65 +1,75 @@
 package config
 
 import (
+	"encoding/hex"
 	"hash/fnv"
 	"image/color"
-
-	"charm.land/lipgloss/v2"
 )
+
+func hexColor(s string) color.RGBA {
+	if len(s) > 0 && s[0] == '#' {
+		s = s[1:]
+	}
+	b, _ := hex.DecodeString(s)
+	if len(b) >= 3 {
+		return color.RGBA{R: b[0], G: b[1], B: b[2], A: 255}
+	}
+	return color.RGBA{R: 170, G: 170, B: 170, A: 255}
+}
 
 // ExtensionColors maps file extensions to display colors.
 var ExtensionColors = map[string]color.Color{
 	// Source code
-	".go":   lipgloss.Color("#00ADD8"),
-	".rs":   lipgloss.Color("#DEA584"),
-	".py":   lipgloss.Color("#3572A5"),
-	".js":   lipgloss.Color("#F7DF1E"),
-	".ts":   lipgloss.Color("#3178C6"),
-	".jsx":  lipgloss.Color("#61DAFB"),
-	".tsx":  lipgloss.Color("#61DAFB"),
-	".rb":   lipgloss.Color("#CC342D"),
-	".java": lipgloss.Color("#B07219"),
-	".c":    lipgloss.Color("#555555"),
-	".cpp":  lipgloss.Color("#F34B7D"),
-	".h":    lipgloss.Color("#75507B"),
-	".hpp":  lipgloss.Color("#F34B7D"),
-	".cs":   lipgloss.Color("#68217A"),
-	".php":  lipgloss.Color("#4F5D95"),
-	".lua":  lipgloss.Color("#000080"),
-	".sh":   lipgloss.Color("#89E051"),
-	".bash": lipgloss.Color("#89E051"),
+	".go":   hexColor("#00ADD8"),
+	".rs":   hexColor("#DEA584"),
+	".py":   hexColor("#3572A5"),
+	".js":   hexColor("#F7DF1E"),
+	".ts":   hexColor("#3178C6"),
+	".jsx":  hexColor("#61DAFB"),
+	".tsx":  hexColor("#61DAFB"),
+	".rb":   hexColor("#CC342D"),
+	".java": hexColor("#B07219"),
+	".c":    hexColor("#555555"),
+	".cpp":  hexColor("#F34B7D"),
+	".h":    hexColor("#75507B"),
+	".hpp":  hexColor("#F34B7D"),
+	".cs":   hexColor("#68217A"),
+	".php":  hexColor("#4F5D95"),
+	".lua":  hexColor("#000080"),
+	".sh":   hexColor("#89E051"),
+	".bash": hexColor("#89E051"),
 
 	// Web
-	".html": lipgloss.Color("#E34C26"),
-	".css":  lipgloss.Color("#563D7C"),
-	".scss": lipgloss.Color("#C6538C"),
-	".vue":  lipgloss.Color("#41B883"),
-	".svlt": lipgloss.Color("#FF3E00"),
+	".html": hexColor("#E34C26"),
+	".css":  hexColor("#563D7C"),
+	".scss": hexColor("#C6538C"),
+	".vue":  hexColor("#41B883"),
+	".svlt": hexColor("#FF3E00"),
 
 	// Data / Config
-	".json": lipgloss.Color("#A0A0A0"),
-	".yaml": lipgloss.Color("#CB171E"),
-	".yml":  lipgloss.Color("#CB171E"),
-	".toml": lipgloss.Color("#9C4121"),
-	".xml":  lipgloss.Color("#0060AC"),
-	".sql":  lipgloss.Color("#E38C00"),
-	".csv":  lipgloss.Color("#237346"),
+	".json": hexColor("#A0A0A0"),
+	".yaml": hexColor("#CB171E"),
+	".yml":  hexColor("#CB171E"),
+	".toml": hexColor("#9C4121"),
+	".xml":  hexColor("#0060AC"),
+	".sql":  hexColor("#E38C00"),
+	".csv":  hexColor("#237346"),
 
 	// Docs
-	".md":   lipgloss.Color("#083FA1"),
-	".txt":  lipgloss.Color("#888888"),
-	".rst":  lipgloss.Color("#141414"),
-	".adoc": lipgloss.Color("#E40046"),
+	".md":   hexColor("#083FA1"),
+	".txt":  hexColor("#888888"),
+	".rst":  hexColor("#141414"),
+	".adoc": hexColor("#E40046"),
 
 	// Build / DevOps
-	".mk":         lipgloss.Color("#427819"),
-	".cmake":      lipgloss.Color("#DA3434"),
-	".dockerfile": lipgloss.Color("#384D54"),
-	".tf":         lipgloss.Color("#5C4EE5"),
+	".mk":         hexColor("#427819"),
+	".cmake":      hexColor("#DA3434"),
+	".dockerfile": hexColor("#384D54"),
+	".tf":         hexColor("#5C4EE5"),
 }
 
 // DefaultFileColor is used when the extension is not in the map.
-var DefaultFileColor = lipgloss.Color("#AAAAAA")
+var DefaultFileColor color.Color = hexColor("#AAAAAA")
 
 // ColorForExtension returns the color for a file extension.
 func ColorForExtension(ext string) color.Color {
@@ -71,22 +81,22 @@ func ColorForExtension(ext string) color.Color {
 
 // UserColors is a palette for assigning consistent colors to users.
 var UserColors = []color.Color{
-	lipgloss.Color("#E06C75"),
-	lipgloss.Color("#98C379"),
-	lipgloss.Color("#E5C07B"),
-	lipgloss.Color("#61AFEF"),
-	lipgloss.Color("#C678DD"),
-	lipgloss.Color("#56B6C2"),
-	lipgloss.Color("#BE5046"),
-	lipgloss.Color("#D19A66"),
-	lipgloss.Color("#7EC8E3"),
-	lipgloss.Color("#C3E88D"),
-	lipgloss.Color("#F78C6C"),
-	lipgloss.Color("#89DDFF"),
-	lipgloss.Color("#FFCB6B"),
-	lipgloss.Color("#F07178"),
-	lipgloss.Color("#82AAFF"),
-	lipgloss.Color("#B2CCD6"),
+	hexColor("#E06C75"),
+	hexColor("#98C379"),
+	hexColor("#E5C07B"),
+	hexColor("#61AFEF"),
+	hexColor("#C678DD"),
+	hexColor("#56B6C2"),
+	hexColor("#BE5046"),
+	hexColor("#D19A66"),
+	hexColor("#7EC8E3"),
+	hexColor("#C3E88D"),
+	hexColor("#F78C6C"),
+	hexColor("#89DDFF"),
+	hexColor("#FFCB6B"),
+	hexColor("#F07178"),
+	hexColor("#82AAFF"),
+	hexColor("#B2CCD6"),
 }
 
 // ColorForUser returns a consistent color for a username via hashing.
