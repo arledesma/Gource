@@ -17,36 +17,13 @@ func (m *Model) View() tea.View {
 		return v
 	}
 
-	// Resolution scaling
-	renderScale := m.Settings.RenderScale
-	if renderScale <= 0 {
-		renderScale = 1.0
-	}
-	if m.TotalFrameMs > 80 {
-		renderScale *= 0.75
-	}
+	// Cell pixel size. Default 8x14 is deliberately conservative —
+	// it's better to be slightly small (sharp) than slightly too big (wrapping).
+	// Users can tune up with --cell-size if they want larger output.
+	cellW := 8
+	cellH := 14
 
-	// Determine the sixel output pixel dimensions directly.
-	// Render at this size — no oversized render + downscale.
-	var pixW, pixH int
-
-	if m.Settings.DetectedPixW > 0 && m.Settings.DetectedPixH > 0 {
-		// Best case: we know exact terminal pixel size
-		pixW = m.Settings.DetectedPixW
-		pixH = m.Settings.DetectedPixH - 6 // one sixel band margin
-	} else if m.Settings.DetectedCellW > 0 && m.Settings.DetectedCellH > 0 {
-		// We know cell size but not window size
-		pixW = m.Width * m.Settings.DetectedCellW
-		pixH = (m.Height - 1) * m.Settings.DetectedCellH
-	} else {
-		// Fallback: conservative cell size
-		pixW = m.Width * 8
-		pixH = (m.Height - 1) * 12 // 12px per row is safe minimum
-	}
-
-	// --cell-size override replaces detection
 	if m.Settings.CellSize != "" {
-		cellW, cellH := 8, 16
 		parts := strings.SplitN(m.Settings.CellSize, "x", 2)
 		if len(parts) == 2 {
 			if w, err := strconv.Atoi(parts[0]); err == nil && w > 0 {
@@ -56,13 +33,15 @@ func (m *Model) View() tea.View {
 				cellH = h
 			}
 		}
-		pixW = m.Width * cellW
-		pixH = (m.Height - 1) * cellH
 	}
 
-	// Apply render scale
-	pixW = int(float64(pixW) * renderScale)
-	pixH = int(float64(pixH) * renderScale)
+	// Render directly at output size. Subtract 2 rows for margin.
+	scale := m.Settings.RenderScale
+	if scale <= 0 {
+		scale = 1.0
+	}
+	pixW := int(float64(m.Width*cellW) * scale)
+	pixH := int(float64((m.Height-2)*cellH) * scale)
 
 	v.Content = m.RenderFrame(pixW, pixH)
 	return v
