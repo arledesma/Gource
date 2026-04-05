@@ -29,7 +29,7 @@ jobs:
         run: go test -v ./...
 
   release:
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/gource-tui'
     needs: build
     runs-on: ubuntu-latest
     permissions:
