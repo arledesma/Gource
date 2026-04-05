@@ -56,6 +56,8 @@ type Model struct {
 	CameraOffset Vec2    // manual pan offset in pixels
 	ShowLegend   bool
 	ShowHelp     bool
+	LastFrameMs  float64 // last frame render time in ms
+	FrameCount   int64
 
 	userFilterRe *regexp.Regexp
 	fileFilterRe *regexp.Regexp
@@ -243,6 +245,9 @@ func (m *Model) tick() {
 		}
 	}
 
+	// Decay edge heat
+	m.Root.DecayEdgeHeat(decayRate)
+
 	idleTimeout := time.Duration(m.Settings.UserIdleTime * float64(time.Second))
 	for _, u := range m.Users {
 		u.Update(m.Playback.CurrTime, idleTimeout)
@@ -339,6 +344,10 @@ func (m *Model) processCommit(c parser.Commit) {
 				m.Particles.Emit(Vec2{f.ScreenX, f.ScreenY}, color.RGBA{R: 100, G: 220, B: 100, A: 255}, 6, 30, 0.5)
 			}
 		}
+
+		// Propagate edge glow
+		dir := m.Root.FindDir(path)
+		dir.PropagateEdgeHeat()
 
 		m.Actions = append(m.Actions, &Action{
 			Username: c.Username,

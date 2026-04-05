@@ -11,7 +11,9 @@ import (
 
 // GitParser parses git log output using the same format Gource uses.
 type GitParser struct {
-	Dir string
+	Dir       string
+	StartDate string // --since flag (YYYY-MM-DD)
+	StopDate  string // --until flag (YYYY-MM-DD)
 }
 
 func (p *GitParser) Stream(ctx context.Context) <-chan Commit {
@@ -28,6 +30,13 @@ func (p *GitParser) Stream(ctx context.Context) <-chan Commit {
 			"--no-renames",
 			"--no-show-signature",
 			"--pretty=format:user:%aN%n%ct",
+		}
+
+		if p.StartDate != "" {
+			args = append(args, "--since", p.StartDate)
+		}
+		if p.StopDate != "" {
+			args = append(args, "--until", p.StopDate)
 		}
 
 		cmd := exec.CommandContext(ctx, "git", args...)

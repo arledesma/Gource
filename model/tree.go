@@ -19,6 +19,7 @@ type DirNode struct {
 	Collapsed  bool
 	Body       PhysicsBody // position for force-directed layout
 	Depth      int         // tree depth (root=0)
+	EdgeHeat   float64     // glow intensity on edge to parent (0-1)
 }
 
 // NewDirNode creates a directory node.
@@ -143,6 +144,44 @@ func (d *DirNode) SortedFileNames() []string {
 	}
 	sort.Strings(names)
 	return names
+}
+
+// FindDir navigates to the directory containing the given file path.
+func (d *DirNode) FindDir(path string) *DirNode {
+	parts := strings.Split(path, "/")
+	node := d
+	for i := 0; i < len(parts)-1; i++ {
+		child := node.findChild(parts[i])
+		if child == nil {
+			return node
+		}
+		node = child
+	}
+	return node
+}
+
+// PropagateEdgeHeat lights up edges from this node up to root.
+func (d *DirNode) PropagateEdgeHeat() {
+	node := d
+	heat := 1.0
+	for node != nil {
+		if node.EdgeHeat < heat {
+			node.EdgeHeat = heat
+		}
+		heat *= 0.7
+		node = node.Parent
+	}
+}
+
+// DecayEdgeHeat reduces edge heat across the tree.
+func (d *DirNode) DecayEdgeHeat(rate float64) {
+	d.EdgeHeat *= rate
+	if d.EdgeHeat < 0.01 {
+		d.EdgeHeat = 0
+	}
+	for _, child := range d.Children {
+		child.DecayEdgeHeat(rate)
+	}
 }
 
 func (d *DirNode) findChild(name string) *DirNode {

@@ -23,6 +23,7 @@ type Settings struct {
 	UserFilter     string
 	FileFilter     string
 	Background     string // hex color for background
+	Debug          bool
 }
 
 // DefaultSettings returns sensible defaults.

@@ -29,7 +29,15 @@ Requires a sixel-capable terminal (WezTerm, Windows Terminal 1.22+, foot, etc.)`
 				cfg.Path = args[0]
 			}
 
-			p, err := parser.New(cfg.Path)
+			var parserOpts parser.Options
+			if !cfg.StartDate.IsZero() {
+				parserOpts.StartDate = cfg.StartDate.Format("2006-01-02")
+			}
+			if !cfg.StopDate.IsZero() {
+				parserOpts.StopDate = cfg.StopDate.Format("2006-01-02")
+			}
+
+			p, err := parser.New(cfg.Path, parserOpts)
 			if err != nil {
 				return fmt.Errorf("cannot open %s: %w", cfg.Path, err)
 			}
@@ -59,6 +67,7 @@ Requires a sixel-capable terminal (WezTerm, Windows Terminal 1.22+, foot, etc.)`
 	flags.BoolVar(&cfg.HideUsernames, "hide-usernames", false, "Hide user name labels")
 	flags.BoolVar(&cfg.HideDate, "hide-date", false, "Hide the date overlay")
 	flags.BoolVar(&cfg.HideProgress, "hide-progress", false, "Hide the progress bar")
+	flags.BoolVar(&cfg.Debug, "debug", false, "Show FPS counter and debug info")
 
 	var startDate, stopDate string
 	flags.StringVar(&startDate, "start-date", "", "Start date (YYYY-MM-DD)")

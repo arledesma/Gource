@@ -7,6 +7,7 @@ import (
 	imgcolor "image/color"
 	"math"
 	"sync"
+	"time"
 
 	"github.com/acaudwell/gource-tui/config"
 	"github.com/disintegration/imaging"
@@ -141,6 +142,12 @@ func (c camera) worldToScreen(wx, wy float64) (float64, float64) {
 
 // renderImage renders the current state to an image.Image.
 func (m *Model) renderImage(width, height int) image.Image {
+	frameStart := time.Now()
+	defer func() {
+		m.LastFrameMs = float64(time.Since(frameStart).Microseconds()) / 1000.0
+		m.FrameCount++
+	}()
+
 	loadFonts()
 
 	dc := gg.NewContext(width, height)
@@ -175,14 +182,22 @@ func (m *Model) renderImage(width, height int) image.Image {
 	}
 
 	// Text overlay on top of bloom
-	dc.SetFontFace(fontBold)
-	m.drawLabels(dc, m.Root, cam)
-	dc.SetFontFace(fontSmall)
-	m.drawFileLabels(dc, m.Root, cam)
-	dc.SetFontFace(fontRegular)
-	m.drawUserLabels(dc, cam)
+	if !m.Settings.HideDirnames {
+		dc.SetFontFace(fontBold)
+		m.drawLabels(dc, m.Root, cam)
+	}
+	if !m.Settings.HideFilenames {
+		dc.SetFontFace(fontSmall)
+		m.drawFileLabels(dc, m.Root, cam)
+	}
+	if !m.Settings.HideUsernames {
+		dc.SetFontFace(fontRegular)
+		m.drawUserLabels(dc, cam)
+	}
 	dc.SetFontFace(fontStatus)
-	m.drawDateOverlay(dc, width, height)
+	if !m.Settings.HideDate {
+		m.drawDateOverlay(dc, width, height)
+	}
 	if m.ShowLegend {
 		m.drawLegend(dc, width)
 	}
@@ -214,8 +229,15 @@ func (m *Model) RenderToPNG(width, height int) image.Image {
 
 func (m *Model) drawEdges(dc *gg.Context, node *DirNode, cam camera) {
 	for _, child := range node.Children {
-		dc.SetRGBA(0.3, 0.4, 0.5, edgeAlpha)
-		dc.SetLineWidth(math.Max(0.5, 1.5*cam.scale))
+		// Edge brightness based on activity
+		heat := child.EdgeHeat
+		r := 0.3 + heat*0.5
+		g := 0.4 + heat*0.4
+		b := 0.5 + heat*0.5
+		alpha := edgeAlpha + heat*0.5
+		dc.SetRGBA(r, g, b, alpha)
+		lw := 1.5 + heat*2.0
+		dc.SetLineWidth(math.Max(0.5, lw*cam.scale))
 		x1, y1 := cam.worldToScreen(node.Body.Pos.X, node.Body.Pos.Y)
 		x2, y2 := cam.worldToScreen(child.Body.Pos.X, child.Body.Pos.Y)
 
@@ -461,6 +483,10 @@ func (m *Model) drawDateOverlay(dc *gg.Context, width, height int) {
 	infoStr := fmt.Sprintf("%d files   %d users   %.1f d/s", len(m.Files), activeUsers, m.Playback.DaysPerSecond)
 	if m.Playback.Paused {
 		infoStr += "   PAUSED"
+	}
+	if m.Settings.Debug && m.LastFrameMs > 0 {
+		fps := 1000.0 / m.LastFrameMs
+		infoStr += fmt.Sprintf("   %.0fms (%.0f fps)", m.LastFrameMs, fps)
 	}
 	dc.SetRGB(0.6, 0.65, 0.7)
 	dc.DrawStringAnchored(infoStr, float64(width)-12, float64(height)-barH/2, 1.0, 0.5)
