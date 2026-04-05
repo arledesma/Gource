@@ -252,26 +252,30 @@ func (m *Model) RenderToPNG(width, height int) image.Image {
 func (m *Model) drawEdges(dc *gg.Context, node *DirNode, cam camera) {
 	theme := config.GetTheme(m.Settings.Theme)
 	for _, child := range node.Children {
-		// Edge brightness based on activity
 		heat := child.EdgeHeat
-		r := theme.EdgeColor[0] + heat*0.5
-		g := theme.EdgeColor[1] + heat*0.4
-		b := theme.EdgeColor[2] + heat*0.5
-		alpha := edgeAlpha + heat*0.5
-		dc.SetRGBA(r, g, b, alpha)
-		lw := 1.5 + heat*2.0
-		dc.SetLineWidth(math.Max(0.5, lw*cam.scale))
 		x1, y1 := cam.worldToScreen(node.Body.Pos.X, node.Body.Pos.Y)
 		x2, y2 := cam.worldToScreen(child.Body.Pos.X, child.Body.Pos.Y)
 
-		// Quadratic bezier with control point offset perpendicular to the edge
-		mx := (x1 + x2) / 2
-		my := (y1 + y2) / 2
+		// Depth-based dimming: deeper edges are more transparent
+		depthDim := math.Pow(0.85, float64(child.Depth))
+
+		// Base color from theme + heat glow
+		r := theme.EdgeColor[0] + heat*0.5
+		g := theme.EdgeColor[1] + heat*0.4
+		b := theme.EdgeColor[2] + heat*0.5
+		alpha := (edgeAlpha + heat*0.5) * depthDim
+
+		lw := (1.5 + heat*2.0) * depthDim
+		dc.SetRGBA(r, g, b, alpha)
+		dc.SetLineWidth(math.Max(0.5, lw*cam.scale))
+
+		// Quadratic bezier with perpendicular offset
 		dx := x2 - x1
 		dy := y2 - y1
 		dist := math.Hypot(dx, dy)
 		if dist > 0 {
-			// Perpendicular offset proportional to distance
+			mx := (x1 + x2) / 2
+			my := (y1 + y2) / 2
 			offset := dist * 0.1
 			cx := mx + (-dy/dist)*offset
 			cy := my + (dx/dist)*offset
@@ -288,6 +292,9 @@ func (m *Model) drawEdges(dc *gg.Context, node *DirNode, cam camera) {
 }
 
 func (m *Model) drawFileEdges(dc *gg.Context, node *DirNode, cam camera) {
+	if node.Collapsed {
+		return
+	}
 	nx, ny := cam.worldToScreen(node.Body.Pos.X, node.Body.Pos.Y)
 	for _, name := range node.SortedFileNames() {
 		f := node.Files[name]
@@ -307,6 +314,9 @@ func (m *Model) drawFileEdges(dc *gg.Context, node *DirNode, cam camera) {
 }
 
 func (m *Model) drawFiles(dc *gg.Context, node *DirNode, cam camera) {
+	if node.Collapsed {
+		return
+	}
 	for _, name := range node.SortedFileNames() {
 		f := node.Files[name]
 		if f.State == FileRemoved {
@@ -359,6 +369,27 @@ func (m *Model) drawDirNodes(dc *gg.Context, node *DirNode, cam camera) {
 			}
 		}
 
+		theme := config.GetTheme(m.Settings.Theme)
+
+		if node.Collapsed {
+			// Collapsed: larger node with file count
+			totalFiles := node.TotalFiles()
+			radius := (dirNodeRadius*ds + 4) * cam.scale
+			dc.SetRGBA(theme.DirNode[0], theme.DirNode[1], theme.DirNode[2], 0.7)
+			dc.DrawCircle(x, y, radius)
+			dc.Fill()
+			// Outline to indicate collapsed state
+			dc.SetRGBA(0.6, 0.7, 0.9, 0.5)
+			dc.SetLineWidth(1.5 * cam.scale)
+			dc.DrawCircle(x, y, radius)
+			dc.Stroke()
+			// File count
+			dc.SetFontFace(fontSmall)
+			dc.SetRGBA(1, 1, 1, 0.8)
+			dc.DrawStringAnchored(fmt.Sprintf("%d", totalFiles), x, y, 0.5, 0.5)
+			return // don't draw children
+		}
+
 		// Dir glow
 		if maxHeat > 0.1 {
 			glowR := (dirNodeRadius*ds + maxHeat*8.0) * cam.scale
@@ -367,7 +398,6 @@ func (m *Model) drawDirNodes(dc *gg.Context, node *DirNode, cam camera) {
 			dc.Fill()
 		}
 
-		theme := config.GetTheme(m.Settings.Theme)
 		alpha := 0.4 + maxHeat*0.6
 		dc.SetRGBA(theme.DirNode[0], theme.DirNode[1], theme.DirNode[2], alpha)
 		dc.DrawCircle(x, y, dirNodeRadius*ds*cam.scale)
@@ -406,12 +436,24 @@ func (m *Model) drawUsers(dc *gg.Context, cam camera) {
 		if !u.Active {
 			continue
 		}
-		x, y := cam.worldToScreen(u.Body.Pos.X, u.Body.Pos.Y)
 
 		r, g, b, _ := u.Color.RGBA()
 		rf := float64(r) / 0xFFFF
 		gf := float64(g) / 0xFFFF
 		bf := float64(b) / 0xFFFF
+
+		// Trail
+		for i, pos := range u.Trail {
+			t := float64(i) / float64(len(u.Trail)) // 0→1
+			tx, ty := cam.worldToScreen(pos.X, pos.Y)
+			alpha := t * 0.15
+			size := (1.0 + t*2.0) * cam.scale
+			dc.SetRGBA(rf, gf, bf, alpha)
+			dc.DrawCircle(tx, ty, size)
+			dc.Fill()
+		}
+
+		x, y := cam.worldToScreen(u.Body.Pos.X, u.Body.Pos.Y)
 
 		// Glow
 		dc.SetRGBA(rf, gf, bf, 0.2)

@@ -226,14 +226,59 @@ func (m *Model) handleMouseClick(msg tea.MouseClickMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 
-	// Start drag for panning
+	// Try to hit-test directory nodes for collapse/expand
 	if msg.Button == tea.MouseLeft {
+		cellW, cellH := 8, 16
+		if m.Settings.DetectedCellW > 0 {
+			cellW = m.Settings.DetectedCellW
+		}
+		if m.Settings.DetectedCellH > 0 {
+			cellH = m.Settings.DetectedCellH
+		}
+
+		// Convert cell coordinates to pixel coordinates
+		pixX := float64(clickX * cellW)
+		pixY := float64(clickY * cellH)
+
+		// Compute camera (same as render does)
+		cam := m.computeCamera(float64(m.Width*cellW), float64((m.Height-1)*cellH))
+
+		// Convert pixel to world coordinates
+		worldX := (pixX - cam.ox) / cam.scale
+		worldY := (pixY - cam.oy) / cam.scale
+
+		// Hit-test directory nodes
+		hitRadius := 15.0 // world units
+		if hit := m.hitTestDir(m.Root, worldX, worldY, hitRadius); hit != nil {
+			hit.Collapsed = !hit.Collapsed
+			return m, nil
+		}
+
+		// No node hit — start drag
 		m.dragging = true
 		m.lastMouseX = clickX
 		m.lastMouseY = clickY
 	}
 
 	return m, nil
+}
+
+func (m *Model) hitTestDir(node *DirNode, wx, wy, radius float64) *DirNode {
+	if node.Name != "" {
+		dx := node.Body.Pos.X - wx
+		dy := node.Body.Pos.Y - wy
+		if dx*dx+dy*dy < radius*radius {
+			return node
+		}
+	}
+	if !node.Collapsed {
+		for _, child := range node.Children {
+			if hit := m.hitTestDir(child, wx, wy, radius); hit != nil {
+				return hit
+			}
+		}
+	}
+	return nil
 }
 
 func (m *Model) handleMouseMotion(msg tea.MouseMotionMsg) (tea.Model, tea.Cmd) {
@@ -418,6 +463,12 @@ func (m *Model) tick() {
 
 		u.Body.Pos.X, spring.VelX = spring.SpringX.Update(u.Body.Pos.X, spring.VelX, spring.TargetX)
 		u.Body.Pos.Y, spring.VelY = spring.SpringY.Update(u.Body.Pos.Y, spring.VelY, spring.TargetY)
+
+		// Record trail position
+		u.Trail = append(u.Trail, u.Body.Pos)
+		if len(u.Trail) > maxTrailLen {
+			u.Trail = u.Trail[len(u.Trail)-maxTrailLen:]
+		}
 	}
 
 	// Update particles and captions

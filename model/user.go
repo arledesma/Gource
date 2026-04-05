@@ -7,6 +7,8 @@ import (
 	"github.com/arledesma/gource-tui/config"
 )
 
+const maxTrailLen = 12
+
 // User represents a contributor in the visualization.
 type User struct {
 	Name           string
@@ -17,6 +19,7 @@ type User struct {
 	Active         bool
 	Body           PhysicsBody // position for rendering
 	TargetFile     string      // path of file user is moving toward
+	Trail          []Vec2      // recent positions for motion trail
 }
 
 // NewUser creates a user entity.
