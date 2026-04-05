@@ -27,6 +27,12 @@ type Settings struct {
 	CellSize       string  // WxH override for cell pixel dimensions (e.g. "8x18")
 	Theme          string  // color theme name
 	RenderScale    float64 // output resolution scale (0.5 = half res, 1.0 = full)
+
+	// Detected at startup (not CLI flags)
+	DetectedCellW int
+	DetectedCellH int
+	DetectedPixW  int
+	DetectedPixH  int
 }
 
 // DefaultSettings returns sensible defaults.

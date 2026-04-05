@@ -26,12 +26,15 @@ func (m *Model) View() tea.View {
 		renderScale *= 0.75
 	}
 
-	// Cell pixel size for internal rendering resolution.
-	// This controls how many pixels we generate before sixel encoding.
-	// The sixel output is further halved in RenderFrame.
-	// Default 8x16 is conservative — override with --cell-size if needed.
-	cellW := 8
-	cellH := 16
+	// Determine cell pixel size. Priority:
+	// 1. --cell-size flag (explicit override)
+	// 2. Detected at startup via CSI 16t
+	// 3. Fallback to 8x16
+	cellW, cellH := 8, 16
+	if m.Settings.DetectedCellW > 0 && m.Settings.DetectedCellH > 0 {
+		cellW = m.Settings.DetectedCellW
+		cellH = m.Settings.DetectedCellH
+	}
 	if m.Settings.CellSize != "" {
 		parts := strings.SplitN(m.Settings.CellSize, "x", 2)
 		if len(parts) == 2 {
@@ -44,13 +47,17 @@ func (m *Model) View() tea.View {
 		}
 	}
 
-	// Internal render dimensions (full res for quality).
+	// Internal render dimensions
 	pixW := int(float64(m.Width*cellW) * renderScale)
 	pixH := int(float64(m.Height*cellH) * renderScale)
 
-	// The sixel output size (after halving in RenderFrame) must fit
-	// within the terminal. We pass the terminal dimensions so
-	// RenderFrame can clamp the sixel output size.
+	// Pass actual terminal pixel height for sixel clamping in RenderFrame.
+	// If we detected it, use it. Otherwise estimate from cells.
+	if m.Settings.DetectedPixH > 0 {
+		m.termPixH = m.Settings.DetectedPixH
+	} else {
+		m.termPixH = m.Height * cellH
+	}
 	m.termRows = m.Height
 	m.termCols = m.Width
 

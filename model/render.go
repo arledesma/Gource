@@ -229,20 +229,20 @@ func (m *Model) RenderFrame(width, height int) string {
 
 	img := m.renderImage(width, height)
 
-	// Downscale for sixel output.
-	// The sixel image pixel height determines how many terminal rows it
-	// occupies. We target (termRows - 1) rows of output. Since we don't
-	// know the exact cell pixel height, we use the sixel band height (6px)
-	// as the minimum: each terminal row is at least 1 sixel band.
-	// Most terminals have 2-3 sixel bands per cell row (12-18px cells).
-	// Using 2 bands/row is conservative and prevents wrapping.
-	sixelBandsPerRow := 2
-	maxSixelH := (m.termRows - 1) * sixelBandsPerRow * 6
+	// Determine max sixel output height to prevent wrapping.
+	var maxSixelH int
+	if m.termPixH > 0 {
+		// We know the exact pixel height — use it directly with margin
+		maxSixelH = m.termPixH - 6 // subtract one sixel band as safety
+	} else {
+		// Fall back to conservative estimate: 2 sixel bands per cell row
+		maxSixelH = (m.termRows - 1) * 2 * 6
+	}
 	if maxSixelH < 60 {
 		maxSixelH = height / 2
 	}
 
-	// Scale width proportionally
+	// Scale width proportionally to maintain aspect ratio
 	aspect := float64(width) / float64(height)
 	scaledH := maxSixelH
 	scaledW := int(float64(scaledH) * aspect)

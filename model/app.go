@@ -61,8 +61,9 @@ type Model struct {
 	dragging     bool
 	lastMouseX   int
 	lastMouseY   int
-	termRows     int // terminal rows for sixel clamping
+	termRows     int // terminal dimensions for sixel clamping
 	termCols     int
+	termPixH     int // actual terminal pixel height (0 = unknown)
 	ShowLegend   bool
 	ShowHelp     bool
 	LastFrameMs  float64 // render time in ms (image generation)
