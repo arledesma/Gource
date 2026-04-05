@@ -17,17 +17,11 @@ func (m *Model) View() tea.View {
 		return v
 	}
 
-	// Target a fixed output resolution based on terminal cell count.
-	// Rather than guessing cell pixel size (varies wildly by terminal,
-	// font, DPI), we target a resolution that fits any reasonable setup.
-	// Height = rows * 6 pixels. A sixel band is 6px, and even the
-	// smallest terminal cells are at least 6px tall, so this guarantees
-	// the output fits within the terminal.
-	// Users can scale up with --cell-size (e.g. 8x12 or 8x16).
-	cellW := 8
-	cellH := 6
+	var pixW, pixH int
 
 	if m.Settings.CellSize != "" {
+		// Explicit override — highest priority
+		cellW, cellH := 8, 16
 		parts := strings.SplitN(m.Settings.CellSize, "x", 2)
 		if len(parts) == 2 {
 			if w, err := strconv.Atoi(parts[0]); err == nil && w > 0 {
@@ -37,15 +31,29 @@ func (m *Model) View() tea.View {
 				cellH = h
 			}
 		}
+		pixW = m.Width * cellW
+		pixH = (m.Height - 1) * cellH
+	} else if m.Settings.DetectedPixW > 0 && m.Settings.DetectedPixH > 0 {
+		// Detected window pixel size — use directly
+		pixW = m.Settings.DetectedPixW
+		pixH = m.Settings.DetectedPixH
+	} else if m.Settings.DetectedCellW > 0 && m.Settings.DetectedCellH > 0 {
+		// Detected cell size — compute from cells
+		pixW = m.Width * m.Settings.DetectedCellW
+		pixH = (m.Height - 1) * m.Settings.DetectedCellH
+	} else {
+		// Fallback: one sixel band per row (guaranteed to fit)
+		pixW = m.Width * 8
+		pixH = (m.Height - 2) * 6
 	}
 
-	// Render directly at output size. Subtract 2 rows for margin.
+	// Apply render scale
 	scale := m.Settings.RenderScale
 	if scale <= 0 {
 		scale = 1.0
 	}
-	pixW := int(float64(m.Width*cellW) * scale)
-	pixH := int(float64((m.Height-2)*cellH) * scale)
+	pixW = int(float64(pixW) * scale)
+	pixH = int(float64(pixH) * scale)
 
 	v.Content = m.RenderFrame(pixW, pixH)
 	return v

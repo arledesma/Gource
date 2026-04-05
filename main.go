@@ -42,6 +42,13 @@ Requires a sixel-capable terminal (WezTerm, Windows Terminal 1.22+, foot, etc.)`
 				return fmt.Errorf("cannot open %s: %w", cfg.Path, err)
 			}
 
+			// Detect terminal pixel size before Bubble Tea takes stdin
+			termSize := model.DetectTermPixelSize()
+			cfg.DetectedCellW = termSize.CellW
+			cfg.DetectedCellH = termSize.CellH
+			cfg.DetectedPixW = termSize.PixW
+			cfg.DetectedPixH = termSize.PixH
+
 			m := model.New(cfg, p)
 			prog := tea.NewProgram(m)
 
