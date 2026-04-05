@@ -254,7 +254,7 @@ func (m *Model) handleMouseMotion(msg tea.MouseMotionMsg) (tea.Model, tea.Cmd) {
 	m.lastMouseY = msg.Y
 
 	// Convert cell delta to pixel delta
-	cellW, cellH := detectCellSize()
+	cellW, cellH := 8, 16
 	m.CameraOffset.X += float64(dx * cellW)
 	m.CameraOffset.Y += float64(dy * cellH)
 
@@ -280,7 +280,7 @@ func (m *Model) seekToProgress(progress float64) {
 }
 
 func (m *Model) saveScreenshot() {
-	cellW, cellH := detectCellSize()
+	cellW, cellH := 8, 16
 	pixW := m.Width * cellW
 	pixH := (m.Height - 1) * cellH
 	img := m.renderImage(pixW, pixH)
