@@ -220,6 +220,8 @@ func (m *Model) renderImage(width, height int) image.Image {
 }
 
 // RenderFrame renders the current state to a sixel-encoded string.
+// Width and height are the final output pixel dimensions — render
+// happens directly at this size, no downscaling.
 func (m *Model) RenderFrame(width, height int) string {
 	if width < 10 || height < 10 {
 		return ""
@@ -229,35 +231,11 @@ func (m *Model) RenderFrame(width, height int) string {
 
 	img := m.renderImage(width, height)
 
-	// Determine max sixel output height to prevent wrapping.
-	var maxSixelH int
-	if m.termPixH > 0 {
-		// We know the exact pixel height — use it directly with margin
-		maxSixelH = m.termPixH - 6 // subtract one sixel band as safety
-	} else {
-		// Fall back to conservative estimate: 2 sixel bands per cell row
-		maxSixelH = (m.termRows - 1) * 2 * 6
-	}
-	if maxSixelH < 60 {
-		maxSixelH = height / 2
-	}
-
-	// Scale width proportionally to maintain aspect ratio
-	aspect := float64(width) / float64(height)
-	scaledH := maxSixelH
-	scaledW := int(float64(scaledH) * aspect)
-	if scaledW < 10 {
-		scaledW = width / 2
-		scaledH = height / 2
-	}
-
-	scaled := imaging.Resize(img, scaledW, scaledH, imaging.Box)
-
 	encStart := time.Now()
 	var buf bytes.Buffer
-	buf.Grow(scaledW * scaledH) // pre-allocate rough estimate
+	buf.Grow(width * height / 2)
 	enc := sixel.NewEncoder(&buf)
-	enc.Encode(scaled)
+	enc.Encode(img)
 
 	m.SixelEncMs = float64(time.Since(encStart).Microseconds()) / 1000.0
 	m.SixelBytes = buf.Len()
