@@ -332,9 +332,8 @@ func (m *Model) tick() {
 	// Decay edge heat
 	m.Root.DecayEdgeHeat(decayRate)
 
-	idleTimeout := time.Duration(m.Settings.UserIdleTime * float64(time.Second))
 	for _, u := range m.Users {
-		u.Update(m.Playback.CurrTime, idleTimeout)
+		u.Update(m.Settings.UserIdleTime)
 	}
 
 	// Update actions
@@ -396,7 +395,18 @@ func (m *Model) processCommit(c parser.Commit) {
 	user.Touch(c.Timestamp)
 
 	if len(c.Files) > 0 {
-		user.TargetFile = c.Files[len(c.Files)-1].Path
+		targetPath := c.Files[len(c.Files)-1].Path
+		user.TargetFile = targetPath
+
+		// Initialize new user position near their first target file
+		if user.ActionCount == 1 {
+			if f, ok := m.Files[targetPath]; ok {
+				user.Body.Pos = Vec2{f.ScreenX - 25, f.ScreenY}
+			} else {
+				// File not yet positioned — place near root
+				user.Body.Pos = m.Root.Body.Pos
+			}
+		}
 	}
 
 	// Add commit message caption near user
