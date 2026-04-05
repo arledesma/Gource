@@ -6,7 +6,7 @@ import "time"
 type Settings struct {
 	Path           string
 	DaysPerSecond  float64
-	AutoSkip       float64 // skip idle periods longer than this (seconds)
+	AutoSkip       float64 // skip idle periods longer than this (days of sim time)
 	FileIdleTime   float64 // seconds before idle files fade
 	UserIdleTime   float64 // seconds before idle users disappear
 	MaxFiles       int     // max files to display (0 = unlimited)
@@ -14,11 +14,15 @@ type Settings struct {
 	StopDate       time.Time
 	TickRate       time.Duration
 	Loop           bool
+	NoBloom        bool
 	HideFilenames  bool
 	HideDirnames   bool
 	HideUsernames  bool
 	HideProgress   bool
 	HideDate       bool
+	UserFilter     string
+	FileFilter     string
+	Background     string // hex color for background
 }
 
 // DefaultSettings returns sensible defaults.

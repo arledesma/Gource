@@ -3,8 +3,10 @@ package main
 import (
 	"fmt"
 	"os"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/spf13/cobra"
 
 	"github.com/acaudwell/gource-tui/config"
 	"github.com/acaudwell/gource-tui/model"
@@ -14,21 +16,73 @@ import (
 func main() {
 	cfg := config.DefaultSettings()
 
-	if len(os.Args) > 1 {
-		cfg.Path = os.Args[1]
+	rootCmd := &cobra.Command{
+		Use:   "gource-tui [path]",
+		Short: "Visualize source control history as an animated graph in the terminal",
+		Long: `gource-tui renders git repository history as a force-directed graph
+with bloom effects, using sixel graphics in your terminal.
+
+Requires a sixel-capable terminal (WezTerm, Windows Terminal 1.22+, foot, etc.)`,
+		Args: cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if len(args) > 0 {
+				cfg.Path = args[0]
+			}
+
+			p, err := parser.New(cfg.Path)
+			if err != nil {
+				return fmt.Errorf("cannot open %s: %w", cfg.Path, err)
+			}
+
+			m := model.New(cfg, p)
+			prog := tea.NewProgram(m)
+
+			if _, err := prog.Run(); err != nil {
+				return err
+			}
+			return nil
+		},
 	}
 
-	p, err := parser.New(cfg.Path)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
+	flags := rootCmd.Flags()
+	flags.Float64VarP(&cfg.DaysPerSecond, "speed", "s", cfg.DaysPerSecond, "Days of history per second of playback")
+	flags.Float64Var(&cfg.AutoSkip, "auto-skip", cfg.AutoSkip, "Auto-skip idle periods longer than N days")
+	flags.Float64Var(&cfg.FileIdleTime, "file-idle-time", cfg.FileIdleTime, "Seconds before idle files fade")
+	flags.Float64Var(&cfg.UserIdleTime, "user-idle-time", cfg.UserIdleTime, "Seconds before idle users disappear")
+	flags.BoolVar(&cfg.Loop, "loop", false, "Loop playback when finished")
+	flags.BoolVar(&cfg.NoBloom, "no-bloom", false, "Disable bloom post-processing (faster)")
+	flags.StringVar(&cfg.UserFilter, "user-filter", "", "Regex to filter users (only show matching)")
+	flags.StringVar(&cfg.FileFilter, "file-filter", "", "Regex to filter file paths")
+	flags.StringVar(&cfg.Background, "background", "", "Background color as hex (e.g. #1a1a2e)")
+	flags.BoolVar(&cfg.HideFilenames, "hide-filenames", false, "Hide file name labels")
+	flags.BoolVar(&cfg.HideDirnames, "hide-dirnames", false, "Hide directory name labels")
+	flags.BoolVar(&cfg.HideUsernames, "hide-usernames", false, "Hide user name labels")
+	flags.BoolVar(&cfg.HideDate, "hide-date", false, "Hide the date overlay")
+	flags.BoolVar(&cfg.HideProgress, "hide-progress", false, "Hide the progress bar")
+
+	var startDate, stopDate string
+	flags.StringVar(&startDate, "start-date", "", "Start date (YYYY-MM-DD)")
+	flags.StringVar(&stopDate, "stop-date", "", "Stop date (YYYY-MM-DD)")
+
+	rootCmd.PreRunE = func(cmd *cobra.Command, args []string) error {
+		if startDate != "" {
+			t, err := time.Parse("2006-01-02", startDate)
+			if err != nil {
+				return fmt.Errorf("invalid --start-date: %w", err)
+			}
+			cfg.StartDate = t
+		}
+		if stopDate != "" {
+			t, err := time.Parse("2006-01-02", stopDate)
+			if err != nil {
+				return fmt.Errorf("invalid --stop-date: %w", err)
+			}
+			cfg.StopDate = t
+		}
+		return nil
 	}
 
-	m := model.New(cfg, p)
-	prog := tea.NewProgram(m)
-
-	if _, err := prog.Run(); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
 	}
 }

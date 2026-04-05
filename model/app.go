@@ -7,6 +7,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/harmonica"
 
 	"github.com/acaudwell/gource-tui/config"
 	"github.com/acaudwell/gource-tui/parser"
@@ -20,6 +21,16 @@ type ActivityEntry struct {
 	Time     time.Time
 }
 
+// UserSpring holds Harmonica springs for smooth user movement.
+type UserSpring struct {
+	SpringX  harmonica.Spring
+	SpringY  harmonica.Spring
+	VelX     float64
+	VelY     float64
+	TargetX  float64
+	TargetY  float64
+}
+
 // Model is the top-level Bubble Tea model.
 type Model struct {
 	Settings config.Settings
@@ -29,6 +40,10 @@ type Model struct {
 	Actions  []*Action
 	Playback *PlaybackState
 	Activity []ActivityEntry
+	Particles ParticleSystem
+
+	// User animation springs (keyed by username)
+	UserSprings map[string]*UserSpring
 
 	commitCh  <-chan parser.Commit
 	cancelPar context.CancelFunc
@@ -38,6 +53,8 @@ type Model struct {
 	Height       int
 	CameraZoom   float64 // 0 = auto-fit, >0 = manual zoom
 	CameraOffset Vec2    // manual pan offset in pixels
+	ShowLegend   bool
+	ShowHelp     bool
 }
 
 type tickMsg time.Time
@@ -50,13 +67,14 @@ func New(cfg config.Settings, p parser.Parser) *Model {
 	ch := p.Stream(ctx)
 
 	return &Model{
-		Settings:  cfg,
-		Root:      NewDirNode("", ""),
-		Files:     make(map[string]*File),
-		Users:     make(map[string]*User),
-		Playback:  NewPlayback(cfg.DaysPerSecond),
-		commitCh:  ch,
-		cancelPar: cancel,
+		Settings:    cfg,
+		Root:        NewDirNode("", ""),
+		Files:       make(map[string]*File),
+		Users:       make(map[string]*User),
+		Playback:    NewPlayback(cfg.DaysPerSecond),
+		UserSprings: make(map[string]*UserSpring),
+		commitCh:    ch,
+		cancelPar:   cancel,
 	}
 }
 
@@ -77,6 +95,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.KeyPressMsg:
 		return m.handleKey(msg)
+
+	case tea.MouseWheelMsg:
+		return m.handleMouseWheel(msg)
 
 	case commitBatchMsg:
 		for _, c := range msg {
@@ -108,7 +129,7 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.Playback.SpeedUp()
 	case "-":
 		m.Playback.SlowDown()
-	case "z": // zoom in
+	case "z":
 		if m.CameraZoom == 0 {
 			m.CameraZoom = 1.0
 		}
@@ -116,7 +137,7 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if m.CameraZoom > 10 {
 			m.CameraZoom = 10
 		}
-	case "x": // zoom out
+	case "x":
 		if m.CameraZoom == 0 {
 			m.CameraZoom = 1.0
 		}
@@ -132,9 +153,36 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.CameraOffset.X += panStep
 	case "right":
 		m.CameraOffset.X -= panStep
-	case "home", "0":
+	case "home":
 		m.CameraZoom = 0
 		m.CameraOffset = Vec2{}
+	case "l":
+		m.ShowLegend = !m.ShowLegend
+	case "?":
+		m.ShowHelp = !m.ShowHelp
+	}
+	return m, nil
+}
+
+func (m *Model) handleMouseWheel(msg tea.MouseWheelMsg) (tea.Model, tea.Cmd) {
+	mouse := msg.Mouse()
+	switch mouse.Button {
+	case tea.MouseWheelUp:
+		if m.CameraZoom == 0 {
+			m.CameraZoom = 1.0
+		}
+		m.CameraZoom *= 1.15
+		if m.CameraZoom > 10 {
+			m.CameraZoom = 10
+		}
+	case tea.MouseWheelDown:
+		if m.CameraZoom == 0 {
+			m.CameraZoom = 1.0
+		}
+		m.CameraZoom /= 1.15
+		if m.CameraZoom < 0.1 {
+			m.CameraZoom = 0.1
+		}
 	}
 	return m, nil
 }
@@ -144,6 +192,17 @@ func (m *Model) tick() {
 
 	m.Playback.AdvanceTime(dt)
 
+	// Auto-skip: if no commits are due and next commit is far away, jump ahead
+	if m.Settings.AutoSkip > 0 && !m.Playback.Paused && len(m.Playback.CommitQueue) > 0 {
+		next := m.Playback.CommitQueue[0].Timestamp
+		gap := next.Sub(m.Playback.CurrTime).Seconds()
+		skipThreshold := m.Settings.AutoSkip * 86400 * m.Playback.DaysPerSecond
+		if gap > skipThreshold {
+			// Jump to just before the next commit
+			m.Playback.CurrTime = next.Add(-time.Second)
+		}
+	}
+
 	for _, commit := range m.Playback.DueCommits() {
 		m.processCommit(commit)
 	}
@@ -152,7 +211,7 @@ func (m *Model) tick() {
 		m.Playback.Finished = true
 	}
 
-	// Heat halves roughly every 2 sim-seconds
+	// Heat decay
 	simDt := dt * m.Playback.DaysPerSecond * 86400
 	decayRate := math.Pow(0.5, simDt/2.0)
 
@@ -169,6 +228,7 @@ func (m *Model) tick() {
 		u.Update(m.Playback.CurrTime, idleTimeout)
 	}
 
+	// Update actions
 	remaining := m.Actions[:0]
 	for _, a := range m.Actions {
 		if !a.Update(dt) {
@@ -177,21 +237,36 @@ func (m *Model) tick() {
 	}
 	m.Actions = remaining
 
-	// Update user positions — move toward their target file
-	for _, u := range m.Users {
+	// Update user positions via Harmonica springs
+	for name, u := range m.Users {
 		if !u.Active || u.TargetFile == "" {
 			continue
 		}
-		if f, ok := m.Files[u.TargetFile]; ok {
-			target := Vec2{f.ScreenX - 30, f.ScreenY}
-			delta := target.Sub(u.Body.Pos)
-			dist := delta.Len()
-			if dist > 2.0 {
-				u.Body.ApplyForce(delta.Normalize().Scale(dist * 2.0))
-			}
-			u.Body.Integrate(dt, 0.8)
+		f, ok := m.Files[u.TargetFile]
+		if !ok {
+			continue
 		}
+
+		spring, exists := m.UserSprings[name]
+		if !exists {
+			spring = &UserSpring{
+				SpringX: harmonica.NewSpring(harmonica.FPS(30), 6.0, 0.6),
+				SpringY: harmonica.NewSpring(harmonica.FPS(30), 6.0, 0.6),
+			}
+			spring.TargetX = f.ScreenX - 25
+			spring.TargetY = f.ScreenY
+			m.UserSprings[name] = spring
+		}
+
+		spring.TargetX = f.ScreenX - 25
+		spring.TargetY = f.ScreenY
+
+		u.Body.Pos.X, spring.VelX = spring.SpringX.Update(u.Body.Pos.X, spring.VelX, spring.TargetX)
+		u.Body.Pos.Y, spring.VelY = spring.SpringY.Update(u.Body.Pos.Y, spring.VelY, spring.TargetY)
 	}
+
+	// Update particles
+	m.Particles.Update(dt)
 
 	// Run force-directed layout
 	UpdateLayout(m.Root, dt)
@@ -205,7 +280,6 @@ func (m *Model) processCommit(c parser.Commit) {
 	}
 	user.Touch(c.Timestamp)
 
-	// Set target to last file in commit
 	if len(c.Files) > 0 {
 		user.TargetFile = c.Files[len(c.Files)-1].Path
 	}
@@ -227,8 +301,14 @@ func (m *Model) processCommit(c parser.Commit) {
 		switch cf.Action {
 		case "D":
 			f.MarkRemoved(c.Timestamp, time.Duration(m.Settings.FileIdleTime)*time.Second)
+			// Red burst particles on delete
+			m.Particles.Emit(Vec2{f.ScreenX, f.ScreenY}, color.RGBA{R: 230, G: 60, B: 60, A: 255}, 8, 40, 0.6)
 		default:
 			f.Touch(c.Timestamp, fileColor)
+			// Green sparkle on create
+			if cf.Action == "A" {
+				m.Particles.Emit(Vec2{f.ScreenX, f.ScreenY}, color.RGBA{R: 100, G: 220, B: 100, A: 255}, 6, 30, 0.5)
+			}
 		}
 
 		m.Actions = append(m.Actions, &Action{

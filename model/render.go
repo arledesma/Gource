@@ -8,6 +8,7 @@ import (
 	"math"
 	"sync"
 
+	"github.com/acaudwell/gource-tui/config"
 	"github.com/disintegration/imaging"
 	"github.com/fogleman/gg"
 	"github.com/mattn/go-sixel"
@@ -155,22 +156,31 @@ func (m *Model) renderImage(width, height int) image.Image {
 	m.drawDirNodes(dc, m.Root, cam)
 	m.drawBeams(dc, cam)
 	m.drawUsers(dc, cam)
+	m.drawParticles(dc, cam)
 
 	// Bloom
-	img := applyBloom(dc.Image(), bloomSigma, bloomIntensity)
+	if !m.Settings.NoBloom {
+		img := applyBloom(dc.Image(), bloomSigma, bloomIntensity)
+		dc = gg.NewContextForImage(img)
+	}
 
 	// Text overlay on top of bloom
-	dc2 := gg.NewContextForImage(img)
-	dc2.SetFontFace(fontBold)
-	m.drawLabels(dc2, m.Root, cam)
-	dc2.SetFontFace(fontSmall)
-	m.drawFileLabels(dc2, m.Root, cam)
-	dc2.SetFontFace(fontRegular)
-	m.drawUserLabels(dc2, cam)
-	dc2.SetFontFace(fontStatus)
-	m.drawDateOverlay(dc2, width, height)
+	dc.SetFontFace(fontBold)
+	m.drawLabels(dc, m.Root, cam)
+	dc.SetFontFace(fontSmall)
+	m.drawFileLabels(dc, m.Root, cam)
+	dc.SetFontFace(fontRegular)
+	m.drawUserLabels(dc, cam)
+	dc.SetFontFace(fontStatus)
+	m.drawDateOverlay(dc, width, height)
+	if m.ShowLegend {
+		m.drawLegend(dc, width)
+	}
+	if m.ShowHelp {
+		m.drawHelp(dc, width, height)
+	}
 
-	return dc2.Image()
+	return dc.Image()
 }
 
 // RenderFrame renders the current state to a sixel-encoded string.
@@ -198,8 +208,26 @@ func (m *Model) drawEdges(dc *gg.Context, node *DirNode, cam camera) {
 		dc.SetLineWidth(math.Max(0.5, 1.5*cam.scale))
 		x1, y1 := cam.worldToScreen(node.Body.Pos.X, node.Body.Pos.Y)
 		x2, y2 := cam.worldToScreen(child.Body.Pos.X, child.Body.Pos.Y)
-		dc.DrawLine(x1, y1, x2, y2)
-		dc.Stroke()
+
+		// Quadratic bezier with control point offset perpendicular to the edge
+		mx := (x1 + x2) / 2
+		my := (y1 + y2) / 2
+		dx := x2 - x1
+		dy := y2 - y1
+		dist := math.Hypot(dx, dy)
+		if dist > 0 {
+			// Perpendicular offset proportional to distance
+			offset := dist * 0.1
+			cx := mx + (-dy/dist)*offset
+			cy := my + (dx/dist)*offset
+			dc.MoveTo(x1, y1)
+			dc.QuadraticTo(cx, cy, x2, y2)
+			dc.Stroke()
+		} else {
+			dc.DrawLine(x1, y1, x2, y2)
+			dc.Stroke()
+		}
+
 		m.drawEdges(dc, child, cam)
 	}
 }
@@ -425,6 +453,137 @@ func (m *Model) drawDateOverlay(dc *gg.Context, width, height int) {
 	}
 	dc.SetRGB(0.6, 0.65, 0.7)
 	dc.DrawStringAnchored(infoStr, float64(width)-12, float64(height)-barH/2, 1.0, 0.5)
+}
+
+func (m *Model) drawParticles(dc *gg.Context, cam camera) {
+	for _, p := range m.Particles.Particles {
+		x, y := cam.worldToScreen(p.Pos.X, p.Pos.Y)
+		r, g, b, _ := p.Color.RGBA()
+		rf := float64(r) / 0xFFFF
+		gf := float64(g) / 0xFFFF
+		bf := float64(b) / 0xFFFF
+
+		t := p.Life / p.MaxLife // 1.0 → 0.0
+		alpha := t * 0.8
+		size := p.Size * t * cam.scale
+
+		dc.SetRGBA(rf, gf, bf, alpha)
+		dc.DrawCircle(x, y, size)
+		dc.Fill()
+	}
+}
+
+func (m *Model) drawLegend(dc *gg.Context, width int) {
+	// Count files by extension
+	extCounts := make(map[string]int)
+	for _, f := range m.Files {
+		if f.State != FileRemoved {
+			extCounts[f.Extension]++
+		}
+	}
+	if len(extCounts) == 0 {
+		return
+	}
+
+	// Sort by count descending
+	type extEntry struct {
+		ext   string
+		count int
+	}
+	var entries []extEntry
+	for ext, count := range extCounts {
+		entries = append(entries, extEntry{ext, count})
+	}
+	for i := 0; i < len(entries); i++ {
+		for j := i + 1; j < len(entries); j++ {
+			if entries[j].count > entries[i].count {
+				entries[i], entries[j] = entries[j], entries[i]
+			}
+		}
+	}
+
+	// Limit to top 15
+	if len(entries) > 15 {
+		entries = entries[:15]
+	}
+
+	// Draw background panel
+	lineH := 18.0
+	panelW := 140.0
+	panelH := float64(len(entries))*lineH + 30
+	px := float64(width) - panelW - 10
+	py := 10.0
+
+	dc.SetRGBA(0, 0, 0, 0.6)
+	dc.DrawRoundedRectangle(px, py, panelW, panelH, 6)
+	dc.Fill()
+
+	dc.SetFontFace(fontSmall)
+	dc.SetRGBA(0.7, 0.8, 0.9, 0.9)
+	dc.DrawStringAnchored("File Types", px+panelW/2, py+12, 0.5, 0.5)
+
+	for i, e := range entries {
+		y := py + 26 + float64(i)*lineH
+
+		// Color swatch
+		c := config.ColorForExtension(e.ext)
+		r, g, b, _ := c.RGBA()
+		dc.SetRGBA(float64(r)/0xFFFF, float64(g)/0xFFFF, float64(b)/0xFFFF, 0.9)
+		dc.DrawRoundedRectangle(px+8, y-4, 10, 10, 2)
+		dc.Fill()
+
+		// Label
+		ext := e.ext
+		if ext == "" {
+			ext = "(none)"
+		}
+		dc.SetRGBA(0.8, 0.8, 0.8, 0.8)
+		dc.DrawString(fmt.Sprintf("%s  %d", ext, e.count), px+24, y+5)
+	}
+}
+
+func (m *Model) drawHelp(dc *gg.Context, width, height int) {
+	lines := []string{
+		"Controls:",
+		"",
+		"Space     Pause/Resume",
+		"+/-       Speed up/down",
+		"z/x       Zoom in/out",
+		"Arrows    Pan camera",
+		"Home      Reset camera",
+		"l         Toggle legend",
+		"?         Toggle help",
+		"q         Quit",
+	}
+
+	lineH := 20.0
+	panelW := 220.0
+	panelH := float64(len(lines))*lineH + 20
+	px := (float64(width) - panelW) / 2
+	py := (float64(height) - panelH) / 2
+
+	dc.SetRGBA(0, 0, 0, 0.8)
+	dc.DrawRoundedRectangle(px, py, panelW, panelH, 8)
+	dc.Fill()
+
+	dc.SetRGBA(0.15, 0.15, 0.2, 0.9)
+	dc.SetLineWidth(1)
+	dc.DrawRoundedRectangle(px, py, panelW, panelH, 8)
+	dc.Stroke()
+
+	dc.SetFontFace(fontRegular)
+	for i, line := range lines {
+		y := py + 16 + float64(i)*lineH
+		if i == 0 {
+			dc.SetRGBA(0.9, 0.9, 1.0, 1.0)
+			dc.SetFontFace(fontBold)
+			dc.DrawStringAnchored(line, px+panelW/2, y, 0.5, 0.5)
+			dc.SetFontFace(fontRegular)
+		} else {
+			dc.SetRGBA(0.7, 0.75, 0.8, 0.9)
+			dc.DrawString(line, px+16, y)
+		}
+	}
 }
 
 // applyBloom creates a bloom glow effect using a downscaled blur for performance.
