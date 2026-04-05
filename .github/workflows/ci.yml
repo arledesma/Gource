@@ -1,0 +1,61 @@
+name: CI
+
+on:
+  push:
+    branches: [gource-tui, main]
+  pull_request:
+    branches: [gource-tui, main]
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+
+      - name: Build
+        run: go build -v ./...
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: go test -v ./...
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+
+      - name: Build binaries
+        run: |
+          GOOS=linux GOARCH=amd64 go build -o gource-tui-linux-amd64 .
+          GOOS=darwin GOARCH=amd64 go build -o gource-tui-darwin-amd64 .
+          GOOS=darwin GOARCH=arm64 go build -o gource-tui-darwin-arm64 .
+          GOOS=windows GOARCH=amd64 go build -o gource-tui-windows-amd64.exe .
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            gource-tui-linux-amd64
+            gource-tui-darwin-amd64
+            gource-tui-darwin-arm64
+            gource-tui-windows-amd64.exe
+          generate_release_notes: true
