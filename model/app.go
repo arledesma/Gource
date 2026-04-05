@@ -231,7 +231,17 @@ func (m *Model) handleMouseClick(msg tea.MouseClickMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m *Model) handleMouseMotion(msg tea.MouseMotionMsg) (tea.Model, tea.Cmd) {
+	// Only pan while left button is held
+	if msg.Button != tea.MouseLeft {
+		m.dragging = false
+		return m, nil
+	}
+
 	if !m.dragging {
+		// Start drag from current position
+		m.dragging = true
+		m.lastMouseX = msg.X
+		m.lastMouseY = msg.Y
 		return m, nil
 	}
 
@@ -240,7 +250,7 @@ func (m *Model) handleMouseMotion(msg tea.MouseMotionMsg) (tea.Model, tea.Cmd) {
 	m.lastMouseX = msg.X
 	m.lastMouseY = msg.Y
 
-	// Convert cell delta to pixel delta (approximate)
+	// Convert cell delta to pixel delta
 	cellW, cellH := detectCellSize()
 	m.CameraOffset.X += float64(dx * cellW)
 	m.CameraOffset.Y += float64(dy * cellH)

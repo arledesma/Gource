@@ -40,14 +40,10 @@ A terminal-based source control visualization tool inspired by [Gource](https://
 
 ## Install
 
-```sh
-go install github.com/acaudwell/gource-tui@latest
-```
-
-Or build from source:
+Build from source:
 
 ```sh
-git clone https://github.com/acaudwell/gource-tui.git
+git clone <repo-url>
 cd gource-tui
 go build -o gource-tui .
 ```
@@ -86,6 +82,7 @@ gource-tui --start-date 2024-01-01 --stop-date 2024-06-30 .
 | `[` / `]` | Seek back / forward 5% |
 | `z` / `x` | Zoom in / out |
 | `Scroll` | Zoom in / out |
+| `Drag` | Pan camera |
 | `Arrows` | Pan camera |
 | `Home` | Reset camera to auto-fit |
 | `Click bar` | Seek to position in timeline |
