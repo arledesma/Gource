@@ -2,6 +2,8 @@
 
 [![CI](https://github.com/arledesma/gource-tui/actions/workflows/ci.yml/badge.svg)](https://github.com/arledesma/gource-tui/actions/workflows/ci.yml)
 
+https://github.com/user-attachments/assets/f711acd7-1f85-4a86-92aa-d132ca4cd7c5
+
 A terminal-based source control visualization tool inspired by [Gource](https://gource.io). Renders git repository history as an animated force-directed graph with bloom effects, using [sixel graphics](https://en.wikipedia.org/wiki/Sixel) directly in your terminal.
 
 ## Features
